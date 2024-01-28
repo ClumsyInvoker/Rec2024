@@ -10,6 +10,10 @@ from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
 import torch
+from torch.utils.data import DataLoader
+import random
+
+import sys
 
 
 class Dataset:
@@ -282,3 +286,43 @@ class Trainer:
         elif self.task == 'regression':
             test_metric = -test_loss
         return test_loss, test_metric
+
+
+def evaluate(model, dataset, usernum, itemnum, args):
+    NDCG = 0.0
+    HT = 0.0
+    valid_user = 0.0
+
+    if usernum>10000:
+        users = random.sample(range(1, usernum + 1), 10000)
+    else:
+        users = range(1, usernum + 1)
+
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    num_test_neg_item = args.num_test_neg_item
+    for data in tqdm(dataloader, desc="Testing Progress"):
+        user_id, history_items, history_items_len, \
+            target_item_id, neg_item_id, user_features, item_features, neg_item_features = data
+
+        item_idx = torch.cat([target_item_id, neg_item_id], dim=1) # (1, 101)
+        item_idx = torch.reshape(item_idx, (num_test_neg_item+1, 1)) # (101, 1)
+        history_items = torch.tile(history_items, (num_test_neg_item+1, 1)) # (101, maxlen)
+        history_items_len = torch.tile(history_items_len, (num_test_neg_item+1, 1)) # (101, maxlen)
+        user_features = torch.tile(user_features, (num_test_neg_item+1, 1)) # (101, user_feature_dim)
+        item_features = item_features.unsqueeze(1) # (1, 1, item_feature_dim)
+        item_features = torch.cat([item_features, neg_item_features], dim=1) # (1, 101, item_feature_dim)
+        item_features = torch.reshape(item_features, (num_test_neg_item+1, -1)) # (101, item_feature_dim)
+        predictions = model(item_idx, history_items, history_items_len, user_features, item_features).squeeze(1)
+
+        # predictions = -model.predict(*[np.array(l) for l in [[u], [seq], item_idx]])
+        # predictions = predictions[0]
+
+        rank = predictions.argsort().argsort()[0].item()
+
+        valid_user += 1
+
+        if rank < 10:
+            NDCG += 1 / np.log2(rank + 2)
+            HT += 1
+
+    return NDCG / valid_user, HT / valid_user
