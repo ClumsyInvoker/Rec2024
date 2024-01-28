@@ -10,6 +10,10 @@ from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
 import torch
+from torch.utils.data import DataLoader
+import random
+
+import sys
 
 
 class Dataset:
@@ -163,122 +167,33 @@ def create_dataset(dataset='criteo', read_part=True, sample_num=100000, task='cl
         raise Exception('No such dataset!')
 
 
-class EarlyStopper:
+def evaluate(model, dataset, args):
+    NDCG = 0.0
+    HT = 0.0
+    valid_user = 0
 
-    def __init__(self, model, num_trials=50):
-        self.num_trials = num_trials
-        self.trial_counter = 0
-        self.best_metric = -1e9
-        self.best_state = deepcopy(model.state_dict())
-        self.model = model
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    num_test_neg_item = args.num_test_neg_item
+    for data in tqdm(dataloader, desc="Testing Progress"):
+        user_id, history_items, history_items_len, \
+            target_item_id, neg_item_id, user_features, item_features, neg_item_features = data
 
-    def is_continuable(self, metric):
-        # maximize metric
-        if metric > self.best_metric:
-            self.best_metric = metric
-            self.trial_counter = 0
-            self.best_state = deepcopy(self.model.state_dict())
-            return True
-        elif self.trial_counter + 1 < self.num_trials:
-            self.trial_counter += 1
-            return True
-        else:
-            return False
+        item_idx = torch.cat([target_item_id, neg_item_id], dim=1)
+        item_idx = torch.reshape(item_idx, (num_test_neg_item+1, 1))
+        history_items = torch.tile(history_items, (num_test_neg_item+1, 1))
+        history_items_len = torch.tile(history_items_len, (num_test_neg_item+1, 1))
+        user_features = torch.tile(user_features, (num_test_neg_item+1, 1))
+        item_features = item_features.unsqueeze(1)
+        item_features = torch.cat([item_features, neg_item_features], dim=1)
+        item_features = torch.reshape(item_features, (num_test_neg_item+1, -1))
+        predictions = model(user_id, item_idx, history_items, history_items_len, user_features, item_features).squeeze(1)
 
+        rank = predictions.argsort().argsort()[0].item()
 
-class BatchLoader:
+        valid_user += 1
 
-    def __init__(self, X, y, batch_size=4096, shuffle=True):
-        assert len(X) == len(y)
+        if rank < 10:
+            NDCG += 1 / np.log2(rank + 2)
+            HT += 1
 
-        self.batch_size = batch_size
-
-        if shuffle:
-            seq = list(range(len(X)))
-            np.random.shuffle(seq)
-            self.X = X[seq]
-            self.y = y[seq]
-        else:
-            self.X = X
-            self.y = y
-
-    def __iter__(self):
-        def iteration(X, y, batch_size):
-            start = 0
-            end = batch_size
-            while start < len(X):
-                yield X[start: end], y[start: end]
-                start = end
-                end += batch_size
-
-        return iteration(self.X, self.y, self.batch_size)
-
-
-class Trainer:
-
-    def __init__(self, model, optimizer, criterion, batch_size=None, task='classification'):
-        assert task in ['classification', 'regression']
-        self.model = model
-        self.optimizer = optimizer
-        self.criterion = criterion
-        self.batch_size = batch_size
-        self.task = task
-
-    def train(self, train_X, train_y, epoch=100, trials=None, valid_X=None, valid_y=None):
-        if self.batch_size:
-            train_loader = BatchLoader(train_X, train_y, self.batch_size)
-        else:
-            # 为了在 for b_x, b_y in train_loader 的时候统一
-            train_loader = [[train_X, train_y]]
-
-        if trials:
-            early_stopper = EarlyStopper(self.model, trials)
-
-        train_loss_list = []
-        valid_loss_list = []
-
-        for e in tqdm(range(epoch)):
-            # train part
-            self.model.train()
-            train_loss_ = 0
-            for b_x, b_y in train_loader:
-                self.optimizer.zero_grad()
-                pred_y = self.model(b_x)
-                train_loss = self.criterion(pred_y, b_y)
-                train_loss.backward()
-                self.optimizer.step()
-
-                train_loss_ += train_loss.detach() * len(b_x)
-
-            train_loss_list.append(train_loss_ / len(train_X))
-
-            # valid part
-            if trials:
-                valid_loss, valid_metric = self.test(valid_X, valid_y)
-                valid_loss_list.append(valid_loss)
-                if not early_stopper.is_continuable(valid_metric):
-                    break
-
-        if trials:
-            self.model.load_state_dict(early_stopper.best_state)
-            plt.plot(valid_loss_list, label='valid_loss')
-
-        plt.plot(train_loss_list, label='train_loss')
-        plt.legend()
-        plt.show()
-
-        print('train_loss: {:.5f} | train_metric: {:.5f}'.format(*self.test(train_X, train_y)))
-
-        if trials:
-            print('valid_loss: {:.5f} | valid_metric: {:.5f}'.format(*self.test(valid_X, valid_y)))
-
-    def test(self, test_X, test_y):
-        self.model.eval()
-        with torch.no_grad():
-            pred_y = self.model(test_X)
-            test_loss = self.criterion(pred_y, test_y).detach()
-        if self.task == 'classification':
-            test_metric = metrics.roc_auc_score(test_y.cpu(), pred_y.cpu())
-        elif self.task == 'regression':
-            test_metric = -test_loss
-        return test_loss, test_metric
+    return NDCG / valid_user, HT / valid_user

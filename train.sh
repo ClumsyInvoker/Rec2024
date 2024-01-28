@@ -1,0 +1,1 @@
+python main_pretrain.py --dataset MovieLens1m --train_dir DIN --num_epochs 201 --device cuda --l2_emb 0.01

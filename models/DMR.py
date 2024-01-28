@@ -7,7 +7,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, Packed
 
 class deep_match(nn.Module):
     def __init__(self, embed_dim, position_embedd_dim, output_dim):
-        super(deep_match, self).__init__()
+        super().__init__()
 
         self.query_mlp = nn.Sequential(
             nn.Linear(position_embedd_dim, embed_dim),
@@ -117,8 +117,12 @@ class dmr_fcn_attention(nn.Module):
 
 
 class DMR(nn.Module):
-    def __init__(self, field_dims, embed_dim=4, position_embedd_dim=4):
+    def __init__(self, config):
         super(DMR, self).__init__()
+        field_dims = config['field_dims']
+        embed_dim = config['embed_dim']
+        position_embedd_dim = config['position_embedd_dim']
+
         self.item_embed_dim = embed_dim
         self.position_embedd_dim = position_embedd_dim
 
