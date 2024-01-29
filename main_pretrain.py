@@ -20,26 +20,26 @@ def str2bool(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=True)
 parser.add_argument('--train_dir', required=True)
+parser.add_argument('--model_name', default='DSSM_PTCR', type=str)
+parser.add_argument('--exp_name', default='base', type=str)
 parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
-parser.add_argument('--hidden_units', default=50, type=int)
 parser.add_argument('--embed_dim', default=16, type=int)
-parser.add_argument('--num_blocks', default=2, type=int)
 parser.add_argument('--num_epochs', default=201, type=int)
 parser.add_argument('--num_test_neg_item', default=100, type=int)
-parser.add_argument('--num_heads', default=1, type=int)
 parser.add_argument('--dropout_rate', default=0.5, type=float)
 parser.add_argument('--l2_emb', default=0.0, type=float)
 parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
+parser.add_argument('--save_freq', default=10, type=int)
 
 args = parser.parse_args()
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
-with open(os.path.join(args.dataset + '_' + args.train_dir, 'args.txt'), 'w') as f:
+with open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_args.txt'), 'w') as f:
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     # model = DeepInterestNetwork_2tower(config).to(args.device)
     # model = DeepInterestNetwork(config).to(args.device)
     model = DSSM(config).to(args.device)
-    f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
+    f = open(os.path.join(args.dataset + '_' + args.train_dir + args.exp_name + '_log.txt'), 'w')
 
     for name, param in model.named_parameters():
         try:
@@ -104,6 +104,12 @@ if __name__ == '__main__':
 
     T = 0.0
     t0 = time.time()
+    best_val_HR = 0.0
+    best_val_NDCG = 0.0
+    best_HR = 0.0
+    best_NDCG = 0.0
+    best_epoch = -1
+    best_state_dict = None
 
     for epoch in range(epoch_start_idx, args.num_epochs + 1):
         if args.inference_only: break  # just to decrease identition
@@ -132,6 +138,7 @@ if __name__ == '__main__':
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
         print("epoch: {}, loss: {}".format(epoch, epoch_loss / step))
 
+
         if epoch % 1 == 0:
             model.eval()
             t1 = time.time() - t0
@@ -142,17 +149,26 @@ if __name__ == '__main__':
             print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
                   % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
 
+            if t_valid[1] > best_val_HR:
+                best_val_HR = t_valid[1]
+                best_HR = t_test[1]
+                best_NDCG = t_test[0]
+                best_epoch = epoch
+                best_state_dict = model.state_dict()
+
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()
             t0 = time.time()
             model.train()
 
-        if epoch == args.num_epochs:
+        if epoch % args.save_freq == 0 or epoch == args.num_epochs:
             folder = args.dataset + '_' + args.train_dir
-            fname = 'epoch={}.lr={}.layer={}.head={}.hidden={}.maxlen={}.pth'
-            fname = fname.format(args.num_epochs, args.lr, args.num_blocks, args.num_heads, args.hidden_units,
-                                 args.maxlen)
+            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.l2_emb={}.pth'
+            fname = fname.format(args.num_epochs, args.lr, args.embed_dim,
+                                 args.maxlen, args.l2_emb)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 
+    f.write("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
     f.close()
+    print("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
     print("Done")

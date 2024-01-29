@@ -110,18 +110,8 @@ class MyDataset(Dataset):
 
         # 如果是test或val，则为每个样本生成negative item, 固定为100个
         if self.mode == 'val' or self.mode == 'test':
-            self.data_neg_items = []
-            for idx in range(len(self.data)):
-                user_id = int(self.data.iloc[idx]['user_id'])
-                neg_item_ids = []
-                if self.mode == 'val':
-                    total_history_items = self.user_history_positive[user_id][:-1]
-                else:
-                    total_history_items = self.user_history_positive[user_id]
-                for _ in range(self.neg_num):
-                    neg_item_id = random_neq(0, self.item_num, set(total_history_items + neg_item_ids))
-                    neg_item_ids.append(neg_item_id)
-                self.data_neg_items.append(neg_item_ids)
+            self.data_neg_items = pd.read_pickle(data_dir + '/' + mode + '_data_neg_items.pkl')
+
 
     def __len__(self):
         return len(self.data)
@@ -220,30 +210,23 @@ class PTCRDataset(Dataset):
 
         # 如果是test或val，则为每个样本生成negative item, 固定为100个
         if self.mode == 'val' or self.mode == 'test':
-            self.data_neg_items = []
+            self.data_neg_items = pd.read_pickle(data_dir + '/' + mode + '_data_neg_items.pkl')
+            raw_data_neg_item_pos_feedbacks = pd.read_pickle(data_dir + '/' + mode + '_data_neg_item_pos_feedbacks.pkl')
             self.data_neg_item_pos_feedbacks = []
             self.data_neg_item_pos_feedback_lens = []
-            for idx in range(len(self.data)):
-                user_id = int(self.data.iloc[idx]['user_id'])
-                neg_item_ids = []
+
+            for i in range(len(self.data)):
                 neg_item_pos_feedbacks = []
                 neg_item_pos_feedback_lens = []
-                if self.mode == 'val':
-                    total_history_items = self.user_history_positive[user_id][:-1]
-                else:
-                    total_history_items = self.user_history_positive[user_id]
-                for _ in range(self.neg_num):
-                    neg_item_id = random_neq(0, self.item_num, set(total_history_items + neg_item_ids))
-                    raw_neg_item_pos_feedback = self.item_history_positive[neg_item_id][-self.feedback_max_length:]
+                for j in range(self.neg_num):
+                    raw_neg_item_pos_feedback = raw_data_neg_item_pos_feedbacks[i][j]
                     neg_item_pos_feedback = torch.LongTensor(
                         raw_neg_item_pos_feedback + [0] * (self.feedback_max_length - len(raw_neg_item_pos_feedback)))
                     neg_item_pos_feedback_len = torch.LongTensor(
                         [1] * len(raw_neg_item_pos_feedback) + [0] * (
                                     self.feedback_max_length - len(raw_neg_item_pos_feedback)))
-                    neg_item_ids.append(neg_item_id)
                     neg_item_pos_feedbacks.append(neg_item_pos_feedback)
                     neg_item_pos_feedback_lens.append(neg_item_pos_feedback_len)
-                self.data_neg_items.append(neg_item_ids)
                 self.data_neg_item_pos_feedbacks.append(neg_item_pos_feedbacks)
                 self.data_neg_item_pos_feedback_lens.append(neg_item_pos_feedback_lens)
 

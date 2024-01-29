@@ -1,5 +1,6 @@
 import pandas as pd
 import pickle
+import numpy as np
 
 # 读取数据
 pd.set_option('display.max_columns', None)
@@ -115,33 +116,33 @@ test_data.to_csv('test_data.csv', index=False)
 
 # 保存每个user交互过的positive item和negative item
 data_positive = data_positive.sort_values(by=['user_id', 'ts'], ascending=[True, True])
-user_item_interactions = data_positive.groupby('user_id')['item_id'].apply(list).to_dict()
+user_history_positive = data_positive.groupby('user_id')['item_id'].apply(list).to_dict()
 for i in range(user_num):
-    if i not in user_item_interactions:
-        user_item_interactions[i] = []
-pickle.dump(user_item_interactions, open('user_history_positive.pkl', 'wb'))
+    if i not in user_history_positive:
+        user_history_positive[i] = []
+pickle.dump(user_history_positive, open('user_history_positive.pkl', 'wb'))
 
 data_negative = data_negative.sort_values(by=['user_id', 'ts'], ascending=[True, True])
-user_item_interactions = data_negative.groupby('user_id')['item_id'].apply(list).to_dict()
+user_history_negative = data_negative.groupby('user_id')['item_id'].apply(list).to_dict()
 for i in range(user_num):
-    if i not in user_item_interactions:
-        user_item_interactions[i] = []
-pickle.dump(user_item_interactions, open('user_history_negative.pkl', 'wb'))
+    if i not in user_history_negative:
+        user_history_negative[i] = []
+pickle.dump(user_history_negative, open('user_history_negative.pkl', 'wb'))
 
 # 保存每个item交互过的positive user和negative user
 data_positive = data_positive.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-user_item_interactions = data_positive.groupby('item_id')['user_id'].apply(list).to_dict()
+item_history_positive = data_positive.groupby('item_id')['user_id'].apply(list).to_dict()
 for i in range(item_num):
-    if i not in user_item_interactions:
-        user_item_interactions[i] = []
-pickle.dump(user_item_interactions, open('item_history_positive.pkl', 'wb'))
+    if i not in item_history_positive:
+        item_history_positive[i] = []
+pickle.dump(item_history_positive, open('item_history_positive.pkl', 'wb'))
 
 data_negative = data_negative.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-user_item_interactions = data_negative.groupby('item_id')['user_id'].apply(list).to_dict()
+item_history_negative = data_negative.groupby('item_id')['user_id'].apply(list).to_dict()
 for i in range(item_num):
-    if i not in user_item_interactions:
-        user_item_interactions[i] = []
-pickle.dump(user_item_interactions, open('item_history_negative.pkl', 'wb'))
+    if i not in item_history_negative:
+        item_history_negative[i] = []
+pickle.dump(item_history_negative, open('item_history_negative.pkl', 'wb'))
 
 # 保存item的特征
 item_features = pd.read_csv('./movies.dat', names=['item_id', 'title', 'genres'], sep='::', encoding='ISO-8859-1', engine='python')
@@ -159,3 +160,48 @@ item_features = item_features._append(pd.DataFrame(missing_item), ignore_index=T
 item_features = item_features.sort_values(by=['item_id'])
 item_features = item_features.drop(columns=['item_id', 'title', 'genres'])
 item_features.to_csv('item_features.csv', index=False)
+
+
+# 为验证集和测试集生成100个负样本
+def random_neq(l, r, s):
+    t = np.random.randint(l, r)
+    while t in s:
+        t = np.random.randint(l, r)
+    return t
+
+neg_num = 100
+feedback_max_length = 10
+data_neg_items = []
+data_neg_item_pos_feedbacks = []
+for idx in range(len(val_data)):
+    user_id = int(val_data.iloc[idx]['user_id'])
+    neg_item_ids = []
+    raw_neg_item_pos_feedbacks = []
+    total_history_items = user_history_positive[user_id][:-1]
+    for _ in range(neg_num):
+        neg_item_id = random_neq(0, item_num, set(total_history_items + neg_item_ids))
+        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][-feedback_max_length:]
+
+        neg_item_ids.append(neg_item_id)
+        raw_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedback)
+    data_neg_items.append(neg_item_ids)
+    data_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedbacks)
+pickle.dump(data_neg_items, open('val_data_neg_items.pkl', 'wb'))
+pickle.dump(data_neg_item_pos_feedbacks, open('val_data_neg_item_pos_feedbacks.pkl', 'wb'))
+data_neg_items = []
+data_neg_item_pos_feedbacks = []
+for idx in range(len(test_data)):
+    user_id = int(test_data.iloc[idx]['user_id'])
+    neg_item_ids = []
+    raw_neg_item_pos_feedbacks = []
+    total_history_items = user_history_positive[user_id]
+    for _ in range(neg_num):
+        neg_item_id = random_neq(0, item_num, set(total_history_items + neg_item_ids))
+        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][-feedback_max_length:]
+
+        neg_item_ids.append(neg_item_id)
+        raw_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedback)
+    data_neg_items.append(neg_item_ids)
+    data_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedbacks)
+pickle.dump(data_neg_items, open('test_data_neg_items.pkl', 'wb'))
+pickle.dump(data_neg_item_pos_feedbacks, open('test_data_neg_item_pos_feedbacks.pkl', 'wb'))
