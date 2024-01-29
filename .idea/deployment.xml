@@ -1,21 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="Rec2024" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="root@region-41.seetacloud.com:42224 password">
+      <paths name="1">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
-      <paths name="zwh@162.105.146.231:22 password">
+      <paths name="2">
         <serverdata>
           <mappings>
             <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="Rec2024">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>
     </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

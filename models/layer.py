@@ -31,7 +31,6 @@ class Embedding:
             return CpuEmbedding(num_embeddings, embed_dim)
 
 
-
 class FeaturesEmbedding(nn.Module):
 
     def __init__(self, field_dims, embed_dim):

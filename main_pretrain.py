@@ -7,6 +7,7 @@ from tqdm import tqdm
 import numpy as np
 
 from models.DIN import DeepInterestNetwork, DeepInterestNetwork_2tower
+from models.DSSM import DSSM
 from utils.utils import evaluate
 from data.MyDataset import MyDataset
 
@@ -61,7 +62,9 @@ if __name__ == '__main__':
               'dim_config': {'item_id': itemnum+1, 'user_id': usernum+1,
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
               'device': args.device}
-    model = DeepInterestNetwork_2tower(config).to(args.device)
+    # model = DeepInterestNetwork_2tower(config).to(args.device)
+    # model = DeepInterestNetwork(config).to(args.device)
+    model = DSSM(config).to(args.device)
     f = open(os.path.join(args.dataset + '_' + args.train_dir, 'log.txt'), 'w')
 
     for name, param in model.named_parameters():
