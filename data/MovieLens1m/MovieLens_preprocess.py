@@ -219,9 +219,9 @@ pickle.dump(data_neg_item_pos_feedbacks, open('val_data_neg_item_pos_feedbacks.p
 
 data_neg_items = []
 data_neg_item_pos_feedbacks = []
-for idx in range(len(val_data)):
-    user_id = int(val_data.iloc[idx]['user_id'])
-    ts = int(val_data.iloc[idx]['ts'])
+for idx in range(len(test_data)):
+    user_id = int(test_data.iloc[idx]['user_id'])
+    ts = int(test_data.iloc[idx]['ts'])
     neg_item_ids = []
     raw_neg_item_pos_feedbacks = []
     total_history_items = user_history_positive[user_id]

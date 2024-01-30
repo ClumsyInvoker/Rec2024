@@ -20,7 +20,7 @@ def str2bool(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=True)
 parser.add_argument('--train_dir', required=True)
-parser.add_argument('--model_name', default='DSSM_PTCR', type=str)
+parser.add_argument('--model_name', default='DSSM', type=str)
 parser.add_argument('--exp_name', default='base', type=str)
 parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
@@ -34,12 +34,15 @@ parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
-parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--save_freq', default=20, type=int)
 
 args = parser.parse_args()
+save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
-with open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_args.txt'), 'w') as f:
+if not os.path.isdir(save_dir):
+    os.makedirs(save_dir)
+with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -62,10 +65,15 @@ if __name__ == '__main__':
               'dim_config': {'item_id': itemnum+1, 'user_id': usernum+1,
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
               'device': args.device}
-    # model = DeepInterestNetwork_2tower(config).to(args.device)
-    # model = DeepInterestNetwork(config).to(args.device)
-    model = DSSM(config).to(args.device)
-    f = open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_log.txt'), 'w')
+    if args.model_name == "DIN_2tower":
+        model = DeepInterestNetwork_2tower(config).to(args.device)
+    elif args.model_name == "DIN":
+        model = DeepInterestNetwork(config).to(args.device)
+    elif args.model_name == "DSSM":
+        model = DSSM(config).to(args.device)
+    else:
+        raise ValueError("model name not supported")
+    f = open(os.path.join(save_dir, 'log.txt'), 'w')
 
     for name, param in model.named_parameters():
         try:
@@ -162,13 +170,14 @@ if __name__ == '__main__':
             model.train()
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
-            folder = args.dataset + '_' + args.train_dir
-            fname = '{}.epoch={}.lr={}.embed_dim={}.maxlen={}.l2_emb={}.pth'
-            fname = fname.format(args.exp_name, epoch, args.lr, args.embed_dim,
+            folder = save_dir
+            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.l2_emb={}.pth'
+            fname = fname.format(epoch, args.lr, args.embed_dim,
                                  args.maxlen, args.l2_emb)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 
     f.write("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
     f.close()
     print("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
+    torch.save(best_state_dict, os.path.join(save_dir, 'best.pth'))
     print("Done")

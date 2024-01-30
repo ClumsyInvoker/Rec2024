@@ -40,9 +40,12 @@ parser.add_argument('--beta', default=0.01, type=float)
 parser.add_argument('--save_freq', default=10, type=int)
 
 args = parser.parse_args()
+save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
 if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
-with open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_args.txt'), 'w') as f:
+if not os.path.isdir(save_dir):
+    os.makedirs(save_dir)
+with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -74,7 +77,7 @@ if __name__ == '__main__':
     else:
         raise Exception("No such model!")
 
-    f = open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_log.txt'), 'w')
+    f = open(os.path.join(save_dir, 'log.txt'), 'w')
 
     for name, param in model.named_parameters():
         try:
@@ -131,6 +134,8 @@ if __name__ == '__main__':
         step = 0
         epoch_loss = 0.0
         train_loop = tqdm(dataloader, desc="Training Progress")
+        # epoch_loss_rec = epoch_loss_pfpe = epoch_loss_fape = 0.0
+
         for data in train_loop:
             step += 1
             user_id, history_items, history_items_len, target_item_id, \
@@ -141,13 +146,14 @@ if __name__ == '__main__':
                                       item_features,
                                       item_pos_feedback, item_pos_feedback_len, item_neg_feedback,
                                       item_neg_feedback_len)
-
             adam_optimizer.zero_grad()
             indices = np.where(target_item_id.cpu() != 0)
             loss = bce_criterion(logits[indices], label[indices])
+            # epoch_loss_rec += loss.item()
             # for param in model.item_embedding.parameters():
             #     loss += args.l2_emb * torch.norm(param)
             loss += args.alpha * loss_pfpe.sum(dim=1).mean(dim=0)
+            # epoch_loss_pfpe += loss_pfpe.sum(dim=1).mean(dim=0).item()
 
             # fape loss
             selected_indices = (label == 1) & (cold_item == 1)
@@ -158,15 +164,18 @@ if __name__ == '__main__':
                                      neg_hot_item_logits.sum() * len(pos_cold_item_logits)), beta=1, threshold=10)
 
             loss += args.beta * loss_fape
+            # epoch_loss_fape += loss_fape.item()
 
             loss.backward()
             adam_optimizer.step()
             epoch_loss += loss.item()
             train_loop.set_description("Epoch {}/{}".format(epoch, args.num_epochs))
-            train_loop.set_postfix(loss=loss.item())
+            train_loop.set_postfix(loss=epoch_loss/step)
             # print("loss in epoch {} iteration {}: {}".format(epoch, step,
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
         print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
+        # print("Epoch: {}, loss_rec: {}, loss_pfpe: {}, loss_fape: {}".format(
+        #     epoch, epoch_loss_rec / step, epoch_loss_pfpe / step, epoch_loss_fape / step))
 
         if epoch % 1 == 0:
             model.eval()
@@ -191,13 +200,14 @@ if __name__ == '__main__':
             model.train()
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
-            folder = args.dataset + '_' + args.train_dir
-            fname = '{}.epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
-            fname = fname.format(args.exp_name, epoch, args.lr, args.embed_dim,
+            folder = save_dir
+            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
+            fname = fname.format(epoch, args.lr, args.embed_dim,
                                  args.maxlen, args.alpha, args.beta)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 
     f.write("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
     f.close()
     print("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))
+    torch.save(best_state_dict, os.path.join(save_dir, 'best.pth'))
     print("Done")

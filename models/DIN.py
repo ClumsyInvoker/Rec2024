@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from models.layer import Embedding, FullyConnectedLayer, AttentionSequencePoolingLayer
 
+
 class DeepInterestNetwork(nn.Module):
     def __init__(self, config):
         super().__init__()
