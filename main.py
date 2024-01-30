@@ -74,7 +74,7 @@ if __name__ == '__main__':
     else:
         raise Exception("No such model!")
 
-    f = open(os.path.join(args.dataset + '_' + args.train_dir + args.exp_name + '_log.txt'), 'w')
+    f = open(os.path.join(args.dataset + '_' + args.train_dir, args.exp_name + '_log.txt'), 'w')
 
     for name, param in model.named_parameters():
         try:
@@ -166,7 +166,7 @@ if __name__ == '__main__':
             train_loop.set_postfix(loss=loss.item())
             # print("loss in epoch {} iteration {}: {}".format(epoch, step,
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
-        print("epoch: {}, loss: {}".format(epoch, epoch_loss / step))
+        print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
 
         if epoch % 1 == 0:
             model.eval()
@@ -192,8 +192,8 @@ if __name__ == '__main__':
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
             folder = args.dataset + '_' + args.train_dir
-            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
-            fname = fname.format(args.num_epochs, args.lr, args.embed_dim,
+            fname = '{}.epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
+            fname = fname.format(args.exp_name, epoch, args.lr, args.embed_dim,
                                  args.maxlen, args.alpha, args.beta)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 

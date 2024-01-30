@@ -66,7 +66,7 @@ def evaluate_prompt(model, dataset, args, mode='test'):
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     num_test_neg_item = args.num_test_neg_item
     desc = "Testing Progress" if mode == 'test' else "Validating Progress"
-    for data in tqdm(dataloader, desc="desc"):
+    for data in tqdm(dataloader, desc=desc):
         user_id, history_items, history_items_len, \
             target_item_id, neg_item_id, user_features, item_features, neg_item_features, \
             item_pos_feedback, item_pos_feedback_len, neg_item_pos_feedbacks, neg_item_pos_feedbacks = data

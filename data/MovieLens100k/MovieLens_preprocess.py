@@ -2,6 +2,23 @@ import pandas as pd
 import pickle
 import numpy as np
 
+# 二分查找
+def find_largest_index_less_than_target(arr, target):
+    left, right = 0, len(arr) - 1
+    result = -1
+
+    while left <= right:
+        mid = left + (right - left) // 2
+        if arr[mid] < target:
+            result = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return result
+
+
+
 # 读取数据
 pd.set_option('display.max_columns', None)
 data = pd.read_csv('./u.data', names=['user_id', 'item_id', 'rating', 'ts'], sep='\t', encoding='gbk')
@@ -88,9 +105,9 @@ train_data = merged_data.drop_duplicates(keep=False)
 train_data = train_data.sort_values(by=['user_id', 'ts'], ascending=[True, True])
 train_data = train_data[train_data['positive_behavior_offset'] >= 3]
 
-train_data = train_data.drop(columns=['ts'])
-val_data = val_data.drop(columns=['ts'])
-test_data = test_data.drop(columns=['ts'])
+# train_data = train_data.drop(columns=['ts'])
+# val_data = val_data.drop(columns=['ts'])
+# test_data = test_data.drop(columns=['ts'])
 
 # 存储数据
 train_data.to_csv('train_data.csv', index=False)
@@ -100,33 +117,42 @@ test_data.to_csv('test_data.csv', index=False)
 # 保存每个user交互过的positive item和negative item
 data_positive = data_positive.sort_values(by=['user_id', 'ts'], ascending=[True, True])
 user_history_positive = data_positive.groupby('user_id')['item_id'].apply(list).to_dict()
+user_history_positive_ts = data_positive.groupby('user_id')['ts'].apply(list).to_dict()
 for i in range(user_num):
     if i not in user_history_positive:
         user_history_positive[i] = []
+        user_history_positive_ts[i] = []
 pickle.dump(user_history_positive, open('user_history_positive.pkl', 'wb'))
 data_negative = data_negative.sort_values(by=['user_id', 'ts'], ascending=[True, True])
 user_history_negative = data_negative.groupby('user_id')['item_id'].apply(list).to_dict()
+user_history_negative_ts = data_negative.groupby('user_id')['ts'].apply(list).to_dict()
 for i in range(user_num):
     if i not in user_history_negative:
         user_history_negative[i] = []
+        user_history_negative_ts[i] = []
 pickle.dump(user_history_negative, open('user_history_negative.pkl', 'wb'))
 
 # 保存每个item交互过的positive user和negative user
 data_positive = data_positive.sort_values(by=['item_id', 'ts'], ascending=[True, True])
 item_history_positive = data_positive.groupby('item_id')['user_id'].apply(list).to_dict()
+item_history_positive_ts = data_positive.groupby('item_id')['ts'].apply(list).to_dict()
 for i in range(item_num):
     if i not in item_history_positive:
         item_history_positive[i] = []
+        item_history_positive_ts[i] = []
 pickle.dump(item_history_positive, open('item_history_positive.pkl', 'wb'))
 data_negative = data_negative.sort_values(by=['item_id', 'ts'], ascending=[True, True])
 item_history_negative = data_negative.groupby('item_id')['user_id'].apply(list).to_dict()
+item_history_negative_ts = data_negative.groupby('item_id')['ts'].apply(list).to_dict()
 for i in range(item_num):
     if i not in item_history_negative:
         item_history_negative[i] = []
+        item_history_negative_ts[i] = []
 pickle.dump(item_history_negative, open('item_history_negative.pkl', 'wb'))
 
 
 # 为验证集和测试集生成100个负样本
+np.random.seed(0) # 固定随机种子
 def random_neq(l, r, s):
     t = np.random.randint(l, r)
     while t in s:
@@ -139,29 +165,35 @@ data_neg_items = []
 data_neg_item_pos_feedbacks = []
 for idx in range(len(val_data)):
     user_id = int(val_data.iloc[idx]['user_id'])
+    ts = int(val_data.iloc[idx]['ts'])
     neg_item_ids = []
     raw_neg_item_pos_feedbacks = []
     total_history_items = user_history_positive[user_id][:-1]
     for _ in range(neg_num):
         neg_item_id = random_neq(0, item_num, set(total_history_items + neg_item_ids))
-        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][-feedback_max_length:]
+        p = find_largest_index_less_than_target(item_history_positive_ts[neg_item_id], ts) # 防止特征穿越
+        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][p+1-feedback_max_length:p+1]
 
         neg_item_ids.append(neg_item_id)
         raw_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedback)
     data_neg_items.append(neg_item_ids)
     data_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedbacks)
+print("neg_item_id 0: ", data_neg_items[0]) # 用于验证随机种子正确性
 pickle.dump(data_neg_items, open('val_data_neg_items.pkl', 'wb'))
 pickle.dump(data_neg_item_pos_feedbacks, open('val_data_neg_item_pos_feedbacks.pkl', 'wb'))
+
 data_neg_items = []
 data_neg_item_pos_feedbacks = []
 for idx in range(len(val_data)):
     user_id = int(val_data.iloc[idx]['user_id'])
+    ts = int(val_data.iloc[idx]['ts'])
     neg_item_ids = []
     raw_neg_item_pos_feedbacks = []
     total_history_items = user_history_positive[user_id]
     for _ in range(neg_num):
         neg_item_id = random_neq(0, item_num, set(total_history_items + neg_item_ids))
-        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][-feedback_max_length:]
+        p = find_largest_index_less_than_target(item_history_positive_ts[neg_item_id], ts)
+        raw_neg_item_pos_feedback = item_history_positive[neg_item_id][p + 1 - feedback_max_length:p + 1]
 
         neg_item_ids.append(neg_item_id)
         raw_neg_item_pos_feedbacks.append(raw_neg_item_pos_feedback)
