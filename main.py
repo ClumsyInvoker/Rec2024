@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from tqdm import tqdm
 import numpy as np
+import json
 
 from models.DSSM import DSSM_PTCR, DSSM_PTCR_concat, DSSM_DIN_PTCR, DSSM_SASRec_PTCR
 from utils.utils import evaluate_prompt
@@ -70,6 +71,10 @@ if __name__ == '__main__':
               'prompt_embed_dim': args.embed_dim,
               'prompt_net_hidden_size': args.embed_dim,
               'device': args.device}
+    dataset_meta_data = json.load(open(os.path.join('data', 'dataset_meta_data.json'), 'r'))
+    config['item_feature'] = dataset_meta_data[args.dataset]['item_feature']
+    config['user_feature'] = dataset_meta_data[args.dataset]['user_feature']
+
     if args.model_name == "DSSM_PTCR":
         model = DSSM_PTCR(config).to(args.device)
     elif args.model_name == "DSSM_PTCR_concat":
