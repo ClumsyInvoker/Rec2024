@@ -49,6 +49,9 @@ class DeepInterestNetwork(nn.Module):
 
         return output
 
+    def predict(self, user_id, target_item_id, history_item_id, history_len, user_features, item_features):
+        return self.forward(user_id, target_item_id, history_item_id, history_len, user_features, item_features)
+
 
 class DeepInterestNetwork_2tower(nn.Module):
     def __init__(self, config):
@@ -130,6 +133,8 @@ class DeepInterestNetwork_2tower(nn.Module):
 
         return final_user_embedded, final_item_embedded
 
+    def predict(self, user_id, target_item_id, history_item_id, history_len, user_features, item_features):
+        return self.forward(user_id, target_item_id, history_item_id, history_len, user_features, item_features)
 
 class DIN_PTCR(nn.Module):
     def __init__(self, config):

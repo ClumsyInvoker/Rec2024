@@ -181,7 +181,7 @@ class AttentionSequencePoolingLayer(nn.Module):
     def forward(self, query_ad, user_behavior, user_behavior_length):
         # query ad            : size -> batch_size * 1 * embedding_size
         # user behavior       : size -> batch_size * time_seq_len * embedding_size
-        # user behavior length: size -> batch_size * 1
+        # user behavior length: size -> batch_size * time_seq_len
         # output              : size -> batch_size * 1 * embedding_size
 
         device = query_ad.device
@@ -191,12 +191,13 @@ class AttentionSequencePoolingLayer(nn.Module):
         # print(attention_score.size())
 
         # define mask by length
+        user_behavior_length = torch.sum(user_behavior_length, dim=-1, keepdim=True) # B * 1
         user_behavior_length = user_behavior_length.type(torch.LongTensor)
         mask = torch.arange(user_behavior.size(1))[None, :] < user_behavior_length[:, None]
-        mask = mask.to(device)
+        mask = mask.to(device) # batch * 1 * T
 
         # mask
-        output = torch.mul(attention_score, mask)  # batch_size *
+        output = torch.mul(attention_score, mask)  # batch_size * 1 * time_seq_len
 
         # multiply weight
         output = torch.matmul(output, user_behavior)

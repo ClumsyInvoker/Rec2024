@@ -1,0 +1,68 @@
+{
+    "MovieLens100k": {
+        "user_num": 943,
+        "item_num": 1682,
+        "user_feature": {
+            "dim": 23,
+            "nume_feat_idx": [
+                0
+            ],
+            "cate_id_feat_idx": [
+                [
+                    1,
+                    2
+                ]
+            ],
+            "cate_one_hot_feat_idx": [
+                [
+                    2,
+                    21
+                ]
+            ]
+        },
+        "item_feature": {
+            "dim": 18,
+            "nume_feat_idx": [],
+            "cate_id_feat_idx": [],
+            "cate_one_hot_feat_idx": [
+                [
+                    0,
+                    17
+                ]
+            ]
+        }
+    },
+    "MovieLens1m": {
+        "user_num": 6040,
+        "item_num": 3706,
+        "user_feature": {
+            "dim": 23,
+            "nume_feat_idx": [
+                0
+            ],
+            "cate_id_feat_idx": [
+                [
+                    1,
+                    2
+                ]
+            ],
+            "cate_one_hot_feat_idx": [
+                [
+                    2,
+                    21
+                ]
+            ]
+        },
+        "item_feature": {
+            "dim": 18,
+            "nume_feat_idx": [],
+            "cate_id_feat_idx": [],
+            "cate_one_hot_feat_idx": [
+                [
+                    0,
+                    17
+                ]
+            ]
+        }
+    }
+}

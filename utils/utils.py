@@ -46,7 +46,7 @@ def evaluate(model, dataset, args):
         item_features = item_features.unsqueeze(1)
         item_features = torch.cat([item_features, neg_item_features], dim=1)
         item_features = torch.reshape(item_features, (num_test_neg_item+1, -1))
-        predictions = model(user_id, item_idx, history_items, history_items_len, user_features, item_features).squeeze(1)
+        predictions = model.predict(user_id, item_idx, history_items, history_items_len, user_features, item_features).squeeze(1)
 
         rank = predictions.argsort(descending=True).argsort()[0].item()
 
