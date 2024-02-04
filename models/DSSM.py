@@ -44,9 +44,9 @@ class DSSM(nn.Module):
         user_feature_embedded = self.user_feature_dense(user_features) # (batch_size, embed_dim)
 
         # concat
-        concat_user_feature = torch.cat([user_embedded.squeeze(),  user_feature_embedded.squeeze()], dim=1) # (batch_size, 2*embed_dim)
+        concat_user_feature = torch.cat([user_embedded.squeeze(1),  user_feature_embedded.squeeze(1)], dim=1) # (batch_size, 2*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature) # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()], dim=1) # (batch_size, 2*embed_dim)
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)], dim=1) # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature) # (batch_size, embed_dim)
 
         # simple inner product
@@ -117,7 +117,7 @@ class DSSM_PTCR(nn.Module):
         # item_pos_feedback_embed = torch.where(item_pos_feedback_mask, item_pos_feedback_embed, torch.zeros_like(item_pos_feedback_embed))
         # item_pos_feedback_embed = torch.sum(item_pos_feedback_embed, dim=1) / torch.sum(item_pos_feedback_mask, dim=1, keepdim=True) # (batch_size, embed_dim)
         # prompt_input = item_pos_feedback_embed
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze()) # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1)) # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input) # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim] # (batch_size, prompt_embed_dim)
@@ -177,7 +177,7 @@ class DSSM_PTCR(nn.Module):
         # item_pos_feedback_embed = torch.where(item_pos_feedback_mask, item_pos_feedback_embed, torch.zeros_like(item_pos_feedback_embed))
         # item_pos_feedback_embed = torch.sum(item_pos_feedback_embed, dim=1) / torch.sum(item_pos_feedback_mask, dim=1, keepdim=True) # (batch_size, embed_dim)
         # prompt_input = item_pos_feedback_embed
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze())  # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1))  # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input)  # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim]  # (batch_size, prompt_embed_dim)
@@ -234,7 +234,7 @@ class DSSM_PTCR_concat(nn.Module):
                      item_pos_feedback, item_pos_feedback_mask, item_neg_feedback, item_neg_feedback_mask
                 ):
         final_user_embed, final_item_embed = self.backbone.get_final_user_embed(user_id, target_item_id, history_item_id, history_len, user_features, item_features)
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze()) # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1)) # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input) # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim] # (batch_size, prompt_embed_dim)
@@ -292,7 +292,7 @@ class DSSM_PTCR_concat(nn.Module):
                                                                                 history_item_id, history_len,
                                                                                 user_features, item_features)
 
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze())  # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1))  # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input)  # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim]  # (batch_size, prompt_embed_dim)
@@ -370,9 +370,9 @@ class DSSM_seq(nn.Module):
         user_feature_embedded = self.user_feature_dense(user_features) # (batch_size, embed_dim)
 
         # concat
-        concat_user_feature = torch.cat([user_embedded.squeeze(), user_feature_embedded.squeeze(), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
+        concat_user_feature = torch.cat([user_embedded.squeeze(1), user_feature_embedded.squeeze(1), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature) # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()], dim=1) # (batch_size, 2*embed_dim)
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)], dim=1) # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature) # (batch_size, embed_dim)
 
         # simple inner product
@@ -403,10 +403,10 @@ class DSSM_seq(nn.Module):
 
         # concat
         concat_user_feature = torch.cat(
-            [user_embedded.squeeze(), user_feature_embedded.squeeze(), user_behavior_embedded],
+            [user_embedded.squeeze(1), user_feature_embedded.squeeze(1), user_behavior_embedded],
             dim=1)  # (batch_size, 3*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature)  # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()],
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)],
                                         dim=1)  # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature)  # (batch_size, embed_dim)
 
@@ -457,9 +457,9 @@ class DSSM_SASRec(nn.Module):
         user_feature_embedded = self.user_feature_dense(user_features) # (batch_size, embed_dim)
 
         # concat
-        concat_user_feature = torch.cat([user_embedded.squeeze(), user_feature_embedded.squeeze(), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
+        concat_user_feature = torch.cat([user_embedded.squeeze(1), user_feature_embedded.squeeze(1), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature) # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()], dim=1) # (batch_size, 2*embed_dim)
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)], dim=1) # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature) # (batch_size, embed_dim)
 
         # simple inner product
@@ -527,7 +527,7 @@ class DSSM_SASRec_PTCR(nn.Module):
                      item_pos_feedback, item_pos_feedback_mask, item_neg_feedback, item_neg_feedback_mask
                 ):
         final_user_embed, final_item_embed = self.backbone.get_final_user_embed(user_id, target_item_id, history_item_id, history_len, user_features, item_features)
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze()) # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1)) # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input) # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim] # (batch_size, prompt_embed_dim)
@@ -581,7 +581,7 @@ class DSSM_SASRec_PTCR(nn.Module):
                                                                                 history_item_id, history_len,
                                                                                 user_features, item_features)
 
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze())  # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1))  # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input)  # (batch_size, prompt_embed_dim+prompt_net_total_size)
 
         prompt_embed = total_prompt[:, :self.prompt_embed_dim]  # (batch_size, prompt_embed_dim)
@@ -656,9 +656,9 @@ class DSSM_DIN(nn.Module):
                                                      history_len).squeeze()  # (batch_size, 1, embed_dim)
 
         # concat
-        concat_user_feature = torch.cat([user_embedded.squeeze(), user_feature_embedded.squeeze(), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
+        concat_user_feature = torch.cat([user_embedded.squeeze(1), user_feature_embedded.squeeze(1), user_behavior_embedded], dim=1) # (batch_size, 3*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature) # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()], dim=1) # (batch_size, 2*embed_dim)
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)], dim=1) # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature) # (batch_size, embed_dim)
 
         # simple inner product
@@ -681,14 +681,14 @@ class DSSM_DIN(nn.Module):
 
         history_item_embedded = self.item_embedding(history_item_id)  # (batch_size, max_history_len, embed_dim)
         user_behavior_embedded = self.attn(target_item_embedded, history_item_embedded,
-                                           history_len).squeeze()  # (batch_size, 1, embed_dim)
+                                           history_len).squeeze(1)  # (batch_size, 1, embed_dim)
 
         # concat
         concat_user_feature = torch.cat(
-            [user_embedded.squeeze(), user_feature_embedded.squeeze(), user_behavior_embedded],
+            [user_embedded.squeeze(1), user_feature_embedded.squeeze(1), user_behavior_embedded],
             dim=1)  # (batch_size, 3*embed_dim)
         final_user_embeded = self.user_fc_layer(concat_user_feature)  # (batch_size, embed_dim)
-        concat_item_feature = torch.cat([target_item_embedded.squeeze(), item_feature_embedded.squeeze()],
+        concat_item_feature = torch.cat([target_item_embedded.squeeze(1), item_feature_embedded.squeeze(1)],
                                         dim=1)  # (batch_size, 2*embed_dim)
         final_item_embeded = self.item_fc_layer(concat_item_feature)  # (batch_size, embed_dim)
 
@@ -729,7 +729,7 @@ class DSSM_DIN_PTCR(nn.Module):
                      item_pos_feedback, item_pos_feedback_mask, item_neg_feedback, item_neg_feedback_mask
                 ):
         final_user_embed, final_item_embed = self.backbone.get_final_user_embed(user_id, target_item_id, history_item_id, history_len, user_features, item_features)
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze()) # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1)) # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input) # (batch_size, prompt_embed_dim+prompt_net_total_size)
         # print(total_prompt.shape)
         prompt_embed = total_prompt[:, :self.prompt_embed_dim] # (batch_size, prompt_embed_dim)
@@ -783,7 +783,7 @@ class DSSM_DIN_PTCR(nn.Module):
                                                                                 history_item_id, history_len,
                                                                                 user_features, item_features)
 
-        prompt_input = self.prompt_item_embedding(target_item_id.squeeze())  # (batch_size, prompt_embed_dim)
+        prompt_input = self.prompt_item_embedding(target_item_id.squeeze(1))  # (batch_size, prompt_embed_dim)
         total_prompt = self.prompt_generator(prompt_input)  # (batch_size, prompt_embed_dim+prompt_net_total_size)
 
         prompt_embed = total_prompt[:, :self.prompt_embed_dim]  # (batch_size, prompt_embed_dim)

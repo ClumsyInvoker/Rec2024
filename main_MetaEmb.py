@@ -3,16 +3,15 @@ import time
 import torch
 import argparse
 from torch.utils.data import DataLoader
-from torch.nn import functional as F
 from tqdm import tqdm
 import numpy as np
 import json
 from copy import deepcopy
 
-from models.DSSM import DSSM_PTCR, DSSM_PTCR_concat, DSSM_DIN_PTCR, DSSM_SASRec_PTCR
-from utils.utils import evaluate_prompt
-from data.MyDataset import PTCRDataset
+from models.MetaEmb import MetaEmb
 
+from utils.utils import evaluate_PLATE
+from data.MyDataset import MetaEmbDataset
 
 def str2bool(s):
     if s not in {'false', 'true'}:
@@ -23,9 +22,9 @@ def str2bool(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=True)
 parser.add_argument('--train_dir', required=True)
-parser.add_argument('--model_name', default='DSSM_PTCR', type=str)
+parser.add_argument('--model_name', default='DSSM', type=str)
 parser.add_argument('--exp_name', default='base', type=str)
-parser.add_argument('--batch_size', default=128, type=int)
+parser.add_argument('--batch_size', default=8, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
 parser.add_argument('--embed_dim', default=16, type=int)
@@ -37,9 +36,9 @@ parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
-parser.add_argument('--alpha', default=0.01, type=float)
-parser.add_argument('--beta', default=0.01, type=float)
-parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--save_freq', default=20, type=int)
+parser.add_argument('--K', default=5, type=int)
+parser.add_argument('--alpha', default=0.1, type=float)
 
 args = parser.parse_args()
 save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
@@ -53,12 +52,12 @@ f.close()
 
 if __name__ == '__main__':
     # dataset
-    dataset_train = PTCRDataset(data_dir='data/' + args.dataset,
-                                max_length=args.maxlen, mode='train', device=args.device)
-    dataset_valid = PTCRDataset(data_dir='data/' + args.dataset,
-                                max_length=args.maxlen, mode='val', neg_num=args.num_test_neg_item, device=args.device)
-    dataset_test = PTCRDataset(data_dir='data/' + args.dataset,
-                               max_length=args.maxlen, mode='test', neg_num=args.num_test_neg_item, device=args.device)
+    dataset_train = MetaEmbDataset(data_dir='data/' + args.dataset,
+                                                    max_length=args.maxlen, mode='train', device=args.device, K=args.K)
+    dataset_valid = MetaEmbDataset(data_dir='data/' + args.dataset,
+                                                    max_length=args.maxlen, mode='val', neg_num=args.num_test_neg_item, device=args.device)
+    dataset_test = MetaEmbDataset(data_dir='data/' + args.dataset,
+                                                   max_length=args.maxlen, mode='test', neg_num=args.num_test_neg_item, device=args.device)
 
     usernum = dataset_train.user_num
     itemnum = dataset_train.item_num
@@ -67,28 +66,18 @@ if __name__ == '__main__':
     print('number of users: %d' % usernum, 'number of items: %d' % itemnum)
 
     config = {'embed_dim': args.embed_dim,
-              'dim_config': {'item_id': itemnum + 1, 'user_id': usernum + 1,
+              'dim_config': {'item_id': itemnum+1, 'user_id': usernum+1,
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
-              'prompt_embed_dim': args.embed_dim,
-              'prompt_net_hidden_size': args.embed_dim,
               'device': args.device,
-              'maxlen': args.maxlen
-              }
+              'maxlen': args.maxlen}
     dataset_meta_data = json.load(open(os.path.join('data', 'dataset_meta_data.json'), 'r'))
     config['item_feature'] = dataset_meta_data[args.dataset]['item_feature']
     config['user_feature'] = dataset_meta_data[args.dataset]['user_feature']
 
-    if args.model_name == "DSSM_PTCR":
-        model = DSSM_PTCR(config).to(args.device)
-    elif args.model_name == "DSSM_PTCR_concat":
-        model = DSSM_PTCR_concat(config).to(args.device)
-    elif args.model_name == "DSSM_DIN_PTCR":
-        model = DSSM_DIN_PTCR(config).to(args.device)
-    elif args.model_name == "DSSM_SASRec_PTCR":
-        model = DSSM_SASRec_PTCR(config).to(args.device)
+    if args.model_name == "MetaEmb":
+        model = MetaEmb(config).to(args.device)
     else:
-        raise Exception("No such model!")
-
+        raise ValueError("model name not supported")
     f = open(os.path.join(save_dir, 'log.txt'), 'w')
 
     for name, param in model.named_parameters():
@@ -101,6 +90,9 @@ if __name__ == '__main__':
     # model.apply(torch.nn.init.xavier_uniform_)
 
     model.train()  # enable model training
+
+    assert args.pretrain_model_path is not None
+    model.load_deepfm_and_freeze(args.pretrain_model_path)
 
     epoch_start_idx = 1
     if args.state_dict_path is not None:
@@ -116,20 +108,15 @@ if __name__ == '__main__':
 
             pdb.set_trace()
 
-    # 加载 backbone
-    model.load_and_freeze_backbone(args.pretrain_model_path)
-
     if args.inference_only:
         model.eval()
-        t_test = evaluate_prompt(model, dataset_test, args)
+        t_test = evaluate_PLATE(model, dataset_test, args)
         print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     bce_criterion = torch.nn.BCEWithLogitsLoss()  # torch.nn.BCELoss()
-    # backbone冻结参数不参与训练
-    adam_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr,
-                                      betas=(0.9, 0.98))
+    adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
 
     T = 0.0
     t0 = time.time()
@@ -146,56 +133,63 @@ if __name__ == '__main__':
         step = 0
         epoch_loss = 0.0
         train_loop = tqdm(dataloader, desc="Training Progress")
-        # epoch_loss_rec = epoch_loss_pfpe = epoch_loss_fape = 0.0
-
         for data in train_loop:
             step += 1
-            user_id, history_items, history_items_len, target_item_id, \
-            user_features, item_features, label, cold_item, \
-            item_pos_feedback, item_pos_feedback_len, item_neg_feedback, item_neg_feedback_len = data
+            user_a_ids, user_b_ids, history_items, history_items_len, target_item_ids, \
+            user_a_features, user_b_features, item_features, labels_a, labels_b, cold_item = data
+            batch_loss = None
 
-            logits, loss_pfpe = model(user_id, target_item_id, history_items, history_items_len, user_features,
-                                      item_features,
-                                      item_pos_feedback, item_pos_feedback_len, item_neg_feedback,
-                                      item_neg_feedback_len)
-            adam_optimizer.zero_grad()
-            indices = np.where(target_item_id.cpu() != 0)
-            loss = bce_criterion(logits[indices], label[indices])
-            # epoch_loss_rec += loss.item()
-            # for param in model.item_embedding.parameters():
-            #     loss += args.l2_emb * torch.norm(param)
-            loss += args.alpha * loss_pfpe.sum(dim=1).mean(dim=0)
-            # epoch_loss_pfpe += loss_pfpe.sum(dim=1).mean(dim=0).item()
+            for idx in range(len(user_a_ids)):
+                # first stage
+                user_a_id = user_a_ids[idx].reshape(args.K, -1)
+                target_item_id = target_item_ids[idx].reshape(1, 1).tile(args.K, 1)
+                user_a_feature = user_a_features[idx].reshape(args.K, -1)
+                item_feature = item_features[idx].reshape(1, -1).tile(args.K, 1)
+                label_a = labels_a[idx].reshape(args.K, -1)
+                is_cold_item = torch.ones_like(target_item_id, dtype=torch.bool).to(args.device) # 假装是冷启动item
 
-            # fape loss
-            selected_indices = (label == 1) & (cold_item == 1)
-            pos_cold_item_logits = logits[selected_indices]
-            selected_indices = (label == 0) & (cold_item == 0)
-            neg_hot_item_logits = logits[selected_indices]
-            loss_fape = F.softplus(-(pos_cold_item_logits.sum() * len(neg_hot_item_logits) -
-                                     neg_hot_item_logits.sum() * len(pos_cold_item_logits)), beta=1, threshold=10)
+                logits_a, item_meta_emb = model.get_logit_and_meta_emb(user_a_id, target_item_id, history_items, history_items_len,
+                               user_a_feature, item_feature, is_cold_item)
+                adam_optimizer.zero_grad()
+                loss_a = bce_criterion(logits_a, label_a)
 
-            loss += args.beta * loss_fape
-            # epoch_loss_fape += loss_fape.item()
+                item_meta_emb_grad = torch.autograd.grad(loss_a, item_meta_emb, retain_graph=True, create_graph=True)[0]
+                item_meta_emb = item_meta_emb - args.lr * item_meta_emb_grad
 
-            loss.backward()
+                # second stage
+                user_b_id = user_b_ids[idx].reshape(args.K, -1)
+                user_b_feature = user_a_features[idx].reshape(args.K, -1)
+                label_b = labels_b[idx].reshape(args.K, -1)
+
+                logits_b = model(user_b_id, target_item_id, history_items, history_items_len,
+                               user_b_feature, item_feature, is_cold_item, item_meta_emb=item_meta_emb)
+                adam_optimizer.zero_grad()
+                loss_b = bce_criterion(logits_b, label_b)
+
+                loss = args.alpha * loss_a + (1-args.alpha) * loss_b
+
+                if batch_loss is None:
+                    batch_loss = loss
+                else:
+                    batch_loss += loss
+
+            batch_loss.backward()
             adam_optimizer.step()
-            epoch_loss += loss.item()
+
+            epoch_loss += batch_loss.item() / len(user_a_ids)
             train_loop.set_description("Epoch {}/{}".format(epoch, args.num_epochs))
             train_loop.set_postfix(loss=epoch_loss/step)
             # print("loss in epoch {} iteration {}: {}".format(epoch, step,
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
         print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
-        # print("Epoch: {}, loss_rec: {}, loss_pfpe: {}, loss_fape: {}".format(
-        #     epoch, epoch_loss_rec / step, epoch_loss_pfpe / step, epoch_loss_fape / step))
 
         if epoch % 1 == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
             print('Evaluating', end='')
-            t_valid = evaluate_prompt(model, dataset_valid, args, 'val')
-            t_test = evaluate_prompt(model, dataset_test, args, 'test')
+            t_valid = evaluate_PLATE(model, dataset_valid, args, 'valid')
+            t_test = evaluate_PLATE(model, dataset_test, args, 'test')
             print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
                   % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
 
@@ -213,9 +207,9 @@ if __name__ == '__main__':
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
             folder = save_dir
-            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
+            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.l2_emb={}.pth'
             fname = fname.format(epoch, args.lr, args.embed_dim,
-                                 args.maxlen, args.alpha, args.beta)
+                                 args.maxlen, args.l2_emb)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 
     f.write("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))

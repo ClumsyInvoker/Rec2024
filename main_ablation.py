@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from tqdm import tqdm
 import numpy as np
+from copy import deepcopy
 
 from models.DSSM_ablation import DSSM_PTCR_norelu, DSSM_PTCR_1layer, DSSM_PTCR_reuse
 from utils.utils import evaluate_prompt
@@ -194,7 +195,7 @@ if __name__ == '__main__':
                 best_HR = t_test[1]
                 best_NDCG = t_test[0]
                 best_epoch = epoch
-                best_state_dict = model.state_dict()
+                best_state_dict = deepcopy(model.state_dict())
 
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()

@@ -37,9 +37,14 @@ print("total interaction num: {}, positive interaction num: {}, negative interac
 print("total item num: {}, positive item num: {}"
       .format(data['item_id'].value_counts().shape[0], data_positive['item_id'].value_counts().shape[0]))
 #统计交互次数小于10的item
-item_count = item_count[item_count['count'] < 10]
-print("item num with interaction less than 10: {}".format(item_count.shape[0]))
-cold_item_ids = item_count['item_id'].values
+hot_items = item_count[item_count['count'] >= 10]
+# item_count = item_count.drop(hot_items.index)
+# item_count = item_count[item_count['count'] < 10]
+# cold_item_ids = item_count['item_id'].values
+cold_item_ids = [i for i in range(data['item_id'].max()) if i not in hot_items['item_id'].values]
+print("item num with interaction less than 10: {}".format(len(cold_item_ids)))
+
+pickle.dump(cold_item_ids, open('cold_item_ids.pkl', 'wb'))
 
 
 # 存储meta data

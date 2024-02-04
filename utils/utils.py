@@ -96,3 +96,39 @@ def evaluate_prompt(model, dataset, args, mode='test'):
             HT += 1
 
     return NDCG / valid_user, HT / valid_user
+
+
+def evaluate_PLATE(model, dataset, args, mode='test'):
+    NDCG = 0.0
+    HT = 0.0
+    valid_user = 0
+
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    num_test_neg_item = args.num_test_neg_item
+    for data in tqdm(dataloader, desc="{} Progress".format(mode)):
+        user_id, history_items, history_items_len, \
+        target_item_id, neg_item_id, user_features, item_features, neg_item_features, \
+            is_cold_item = data
+
+        user_id = torch.tile(user_id, (num_test_neg_item + 1, 1))
+        item_idx = torch.cat([target_item_id, neg_item_id], dim=1)
+        item_idx = torch.reshape(item_idx, (num_test_neg_item + 1, 1))
+        history_items = torch.tile(history_items, (num_test_neg_item + 1, 1))
+        history_items_len = torch.tile(history_items_len, (num_test_neg_item + 1, 1))
+        user_features = torch.tile(user_features, (num_test_neg_item + 1, 1))
+        item_features = item_features.unsqueeze(1)
+        item_features = torch.cat([item_features, neg_item_features], dim=1)
+        item_features = torch.reshape(item_features, (num_test_neg_item + 1, -1))
+        is_cold_item = torch.reshape(is_cold_item, (num_test_neg_item + 1, -1))
+        predictions = model.predict(user_id, item_idx, history_items, history_items_len, user_features,
+                                    item_features, is_cold_item).squeeze(1)
+
+        rank = predictions.argsort(descending=True).argsort()[0].item()
+
+        valid_user += 1
+
+        if rank < 10:
+            NDCG += 1 / np.log2(rank + 2)
+            HT += 1
+
+    return NDCG / valid_user, HT / valid_user

@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import json
+from copy import deepcopy
 
 from models.DIN import DeepInterestNetwork
 from models.DeepFM import DeepFM
@@ -14,6 +15,7 @@ from models.DSSM import DSSM_seq, DSSM_DIN, DSSM_SASRec
 from models.DropoutNet import DropoutNet
 from models.SASRec import SASRec
 from models.PPR import PPR
+from models.CB2CF import CB2CF
 
 from utils.utils import evaluate
 from data.MyDataset import MyDataset
@@ -42,6 +44,7 @@ parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
 parser.add_argument('--save_freq', default=20, type=int)
+parser.add_argument('--CB2CF_alpha', default=0.01, type=float)
 
 args = parser.parse_args()
 save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
@@ -95,6 +98,8 @@ if __name__ == '__main__':
         model = SASRec(config).to(args.device)
     elif args.model_name == "PPR":
         model = PPR(config).to(args.device)
+    elif args.model_name == "CB2CF":
+        model = CB2CF(config).to(args.device)
     else:
         raise ValueError("model name not supported")
     f = open(os.path.join(save_dir, 'log.txt'), 'w')
@@ -163,6 +168,8 @@ if __name__ == '__main__':
                 user_features, item_features, label, cold_item = data
 
             logits = model(user_id, target_item_id, history_items, history_items_len, user_features, item_features)
+            if args.model_name == "CB2CF":
+                logits, loss_mse = logits
 
             adam_optimizer.zero_grad()
             indices = np.where(target_item_id.cpu() != 0)
@@ -173,6 +180,10 @@ if __name__ == '__main__':
             if 'user_embedding' in model.state_dict().keys():
                 for param in model.user_embedding.parameters():
                     loss += args.l2_emb * torch.norm(param)
+
+            if args.model_name == "CB2CF":
+                loss += loss_mse * args.CB2CF_alpha
+
             loss.backward()
             adam_optimizer.step()
             epoch_loss += loss.item()
@@ -198,7 +209,7 @@ if __name__ == '__main__':
                 best_HR = t_test[1]
                 best_NDCG = t_test[0]
                 best_epoch = epoch
-                best_state_dict = model.state_dict()
+                best_state_dict = deepcopy(model.state_dict())
 
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()
