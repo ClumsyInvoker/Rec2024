@@ -150,8 +150,9 @@ if __name__ == '__main__':
                                       item_pos_feedback, item_pos_feedback_len, item_neg_feedback,
                                       item_neg_feedback_len)
             adam_optimizer.zero_grad()
-            indices = np.where(target_item_id.cpu() != 0)
-            loss = bce_criterion(logits[indices], label[indices])
+            # indices = np.where(target_item_id.cpu() != 0)
+            # loss = bce_criterion(logits[indices], label[indices])
+            loss = bce_criterion(logits, label)
             # epoch_loss_rec += loss.item()
             # for param in model.item_embedding.parameters():
             #     loss += args.l2_emb * torch.norm(param)

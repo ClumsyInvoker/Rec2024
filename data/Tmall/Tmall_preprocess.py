@@ -1,43 +1,66 @@
 import pandas as pd
 import pickle
 import numpy as np
+import dask.dataframe as dd
 
-# 二分查找
-def find_largest_index_less_than_target(arr, target):
-    left, right = 0, len(arr) - 1
-    result = -1
+data = pd.read_csv("./filtered_data.csv")
+# print(data)
+# print(data.columns.tolist())
 
-    while left <= right:
-        mid = left + (right - left) // 2
-        if arr[mid] < target:
-            result = mid
-            left = mid + 1
-        else:
-            right = mid - 1
+data.columns = ['user_id', 'item_id', 'ts', 'action_type']
+# print(data)
 
-    return result
+# 加载用户和物品的特征以及reid
+user_features = pd.read_csv("./reid_user_features.csv")
+raw_user_ids = user_features['raw_user_id'].values.tolist()
+new_user_ids = user_features['user_id'].values.tolist()
+user_id_map = dict(zip(raw_user_ids, new_user_ids))
+user_features = user_features.sort_values(by=['user_id'], ascending=[True])
+user_features = user_features.drop(columns=['user_id', 'raw_user_id'])
+user_features.to_csv('user_features.csv', index=False)
 
+item_features = pd.read_csv("./reid_item_features.csv")
+raw_item_ids = item_features['raw_item_id'].values.tolist()
+new_item_ids = item_features['item_id'].values.tolist()
+item_id_map = dict(zip(raw_item_ids, new_item_ids))
+item_features = item_features.sort_values(by=['item_id'], ascending=[True])
+item_features = item_features.drop(columns=['item_id', 'raw_item_id'])
+item_features.to_csv('item_features.csv', index=False)
 
-# 读取数据
-pd.set_option('display.max_columns', None)
-data = pd.read_csv('./ratings.dat', names=['user_id', 'item_id', 'rating', 'ts'], sep='::', encoding='gbk', engine='python')
-data['user_id'] = data['user_id'] - 1  # user id从0开始编号
-data['item_id'] = data['item_id'] - 1  # item id从0开始编号
+# 重新映射user_id和item_id
+data['user_id'] = data['user_id'].map(user_id_map)
+data['item_id'] = data['item_id'].map(item_id_map)
+print(data.shape)
 
-# 只选择rating大于阈值的数据
-threshold = 3
-data_positive = data[data['rating'] > threshold]
-data_negative = data[data['rating'] <= threshold]
+# 处理成int32减少内存开销
+data = data.astype('int32')
 
-# 统计热门item和冷门item
+# # 处理action type同时为0和2的(u,i)对
+# def process_group(group):
+#     if any(group['action_type'] == 2):
+#         return group[group['action_type'] == 2].iloc[0].to_frame().transpose()
+#     else:
+#         return group
+# data = data.groupby(['user_id', 'item_id'], as_index=False).apply(process_group).reset_index(drop=True)
+
+print(data.shape)
+
+data_positive = data[data['action_type'] == 2].astype('int32')
+data_negative = data[data['action_type'] == 0].astype('int32')
+print(data_positive.shape, data_negative.shape)
+
+user_num = data['user_id'].max()
+item_num = data['item_id'].max()
+print("user num: {}, item num: {}".format(user_num, item_num))
+
 item_count = data_positive['item_id'].value_counts()
 item_count = pd.DataFrame({'item_id': item_count.index, 'count': item_count.values})
 print("total interaction num: {}, positive interaction num: {}, negative interaction num: {}"
       .format(data.shape[0], data_positive.shape[0], data_negative.shape[0]))
 print("total item num: {}, positive item num: {}"
       .format(data['item_id'].value_counts().shape[0], data_positive['item_id'].value_counts().shape[0]))
-#统计交互次数小于10的item
-hot_items = item_count[item_count['count'] >= 10]
+# 统计交互次数小于20的item
+hot_items = item_count[item_count['count'] >= 20]
 # item_count = item_count.drop(hot_items.index)
 # item_count = item_count[item_count['count'] < 10]
 # cold_item_ids = item_count['item_id'].values
@@ -48,10 +71,6 @@ pickle.dump(cold_item_ids, open('cold_item_ids.pkl', 'wb'))
 
 
 # 存储meta data
-user_num = data['user_id'].max()
-item_num = data['item_id'].max()
-# print('user_num:', data['user_id'].value_counts().size)
-# print('item_num:', data['item_id'].value_counts().size)
 print('user_num:', data['user_id'].max())
 print('item_num:', data['item_id'].max())
 meta_data = {'dataset_name': 'MovieLens1m', 'user_num': data['user_id'].max()+1, 'item_num': data['item_id'].max()+1}
@@ -62,14 +81,17 @@ meta_data.to_csv('meta_data.csv', index=False)
 data_positive = data_positive.sort_values(['user_id', 'ts'], ascending=[True, True])
 data_positive['positive_behavior_offset'] = data_positive.groupby('user_id').cumcount()
 data_positive['positive_behavior_offset'] = data_positive.groupby(['user_id', 'ts'])['positive_behavior_offset'].transform('min')
+print('data_positive: ', data_positive.shape)
 
 data_positive = data_positive.sort_values(['item_id', 'ts'], ascending=[True, True])
 data_positive['item_positive_behavior_offset'] = data_positive.groupby('item_id').cumcount()
 data_positive['item_positive_behavior_offset'] = data_positive.groupby(['item_id', 'ts'])['item_positive_behavior_offset'].transform('min')
+print('data_positive: ', data_positive.shape)
 
 data_negative = data_negative.sort_values(['item_id', 'ts'], ascending=[True, True])
 data_negative['item_negative_behavior_offset'] = data_negative.groupby('item_id').cumcount()
 data_negative['item_negative_behavior_offset'] = data_negative.groupby(['item_id', 'ts'])['item_negative_behavior_offset'].transform('min')
+print('data_negative: ', data_negative.shape)
 
 # 合并到原始数据集
 data = data.merge(data_positive[['user_id', 'item_id', 'ts', 'positive_behavior_offset', 'item_positive_behavior_offset']], on=['user_id', 'item_id', 'ts'], how='left')
@@ -90,7 +112,34 @@ def item_positive_behavior_offset_process_group(group):
 data = data.groupby(['item_id'], as_index=False).apply(item_positive_behavior_offset_process_group).reset_index(drop=True)
 data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].fillna(0)
 
-data = data.merge(data_negative[['item_id', 'ts', 'item_negative_behavior_offset']], on=['item_id', 'ts'], how='left')
+# data.to_csv("data_mid1.csv", index=False)
+print(data.shape)
+
+# 1) 直接merge failed
+# data = data.merge(data_negative[['item_id', 'ts', 'item_negative_behavior_offset']], on=['item_id', 'ts'], how='left')
+# 2) 分块merge failed
+# chunk_size = 100000
+# data['item_negative_behavior_offset'] = None
+# for i in range(0, len(data), chunk_size):
+#     print(i)
+#     data_chunk = data[i:i+chunk_size]
+#     data_chunk = data_chunk.merge(data_negative[['item_id', 'ts', 'item_negative_behavior_offset']], on=['item_id', 'ts'], how='left')
+#     data.update(data_chunk)
+# 3) 组织成字典，然后更新
+item_negative_behavior_offset_dict = data_negative.groupby(['item_id', 'ts'])['item_negative_behavior_offset'].apply(list).to_dict()
+for i in range(len(data)):
+    item_id = data.iloc[i]['item_id']
+    ts = data.iloc[i]['ts']
+    if (item_id, ts) in item_negative_behavior_offset_dict:
+        data.at[i, 'item_negative_behavior_offset'] = item_negative_behavior_offset_dict[(item_id, ts)][0]
+    else:
+        data.at[i, 'item_negative_behavior_offset'] = None
+    if i % 100000 == 0:
+        print(i)
+# 4) 使用dask
+# merged_data = dd.merge(data, data_negative[['item_id', 'ts', 'item_negative_behavior_offset']],
+#                        on=['item_id', 'ts'], how='left')
+# data = merged_data.compute()
 data = data.sort_values(by=['item_id', 'ts'], ascending=[True, True])
 # data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].ffill()
 def item_negative_behavior_offset_process_group(group):
@@ -99,9 +148,11 @@ def item_negative_behavior_offset_process_group(group):
 data = data.groupby(['item_id'], as_index=False).apply(item_negative_behavior_offset_process_group).reset_index(drop=True)
 data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].fillna(0)
 # data = data.drop_duplicates(keep=False)
+print(data.shape)
+# data.to_csv('data_mid.csv', index=False)
 
 # 处理标签和冷门item
-data['label'] = (data['rating'] > threshold).astype(int)
+data['label'] = (data['action_type'] == 2).astype(int)
 data['cold_item'] = data['item_id'].isin(cold_item_ids).astype(int)
 
 # 填充缺失值
@@ -142,6 +193,7 @@ train_data = train_data[train_data['positive_behavior_offset'] >= 3]
 # train_data = train_data.drop(columns=['ts'])
 # val_data = val_data.drop(columns=['ts'])
 # test_data = test_data.drop(columns=['ts'])
+
 
 # 存储数据
 train_data.to_csv('train_data.csv', index=False)
@@ -186,24 +238,6 @@ for i in range(item_num):
         item_history_negative_ts[i] = []
 pickle.dump(item_history_negative, open('item_history_negative.pkl', 'wb'))
 
-# 保存item的特征
-item_features = pd.read_csv('./movies.dat', names=['item_id', 'title', 'genres'], sep='::', encoding='ISO-8859-1', engine='python')
-item_features['item_id'] = item_features['item_id'] - 1
-genres = ['Action', 'Adventure', 'Animation', "Children's", 'Comedy', 'Crime',
-         'Documentary', 'Drama', 'Fantasy','Film-Noir', 'Horror', 'Musical',
-         'Mystery', 'Romance', 'Sci-Fi', 'Thriller', 'War', 'Western']
-for genre in genres:
-    item_features[genre] = item_features['genres'].apply(lambda x: int(genre in x.split('|')))
-#补充缺失的id
-missing_item = {'item_id': [i for i in range(item_features['item_id'].max()+1) if i not in item_features['item_id'].values]}
-for genre in genres:
-    missing_item[genre] = [0]*len(missing_item['item_id'])
-item_features = item_features._append(pd.DataFrame(missing_item), ignore_index=True)
-item_features = item_features.sort_values(by=['item_id'])
-item_features = item_features.drop(columns=['item_id', 'title', 'genres'])
-item_features.to_csv('item_features.csv', index=False)
-
-
 # 为验证集和测试集生成100个负样本
 np.random.seed(0) # 固定随机种子
 def random_neq(l, r, s):
@@ -211,6 +245,20 @@ def random_neq(l, r, s):
     while t in s:
         t = np.random.randint(l, r)
     return t
+# 二分查找
+def find_largest_index_less_than_target(arr, target):
+    left, right = 0, len(arr) - 1
+    result = -1
+
+    while left <= right:
+        mid = left + (right - left) // 2
+        if arr[mid] < target:
+            result = mid
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return result
 
 neg_num = 100
 feedback_max_length = 10

@@ -14,8 +14,8 @@ data_positive = data[data['is_click'] == 1]
 data_negative = data[data['is_click'] == 0]
 print(data_positive.shape, data_negative.shape)
 
-user_num = data['user_id'].max()
-item_num = data['item_id'].max()
+user_num = data['user_id'].max()+1
+item_num = data['item_id'].max()+1
 print("user num: {}, item num: {}".format(user_num, item_num))
 
 item_count = data_positive['item_id'].value_counts()
@@ -46,8 +46,8 @@ print("user num with interaction less than 10: {}".format(len(cold_user_ids)))
 
 
 # 存储meta data
-print('user_num:', data['user_id'].max())
-print('item_num:', data['item_id'].max())
+print('user_num:', data['user_id'].max()+1)
+print('item_num:', data['item_id'].max()+1)
 meta_data = {'dataset_name': 'MovieLens1m', 'user_num': data['user_id'].max()+1, 'item_num': data['item_id'].max()+1}
 meta_data = pd.DataFrame(meta_data, index=[0])
 meta_data.to_csv('meta_data.csv', index=False)
@@ -69,15 +69,28 @@ data_negative['item_negative_behavior_offset'] = data_negative.groupby(['item_id
 data = data.merge(data_positive[['user_id', 'item_id', 'ts', 'positive_behavior_offset', 'item_positive_behavior_offset']], on=['user_id', 'item_id', 'ts'], how='left')
 # 填充缺失值
 data = data.sort_values(by=['user_id', 'ts'], ascending=[True, True])
-data['positive_behavior_offset'] = data['positive_behavior_offset'].ffill()
+# data['positive_behavior_offset'] = data['positive_behavior_offset'].ffill()
+def positive_behavior_offset_process_group(group):
+    group['positive_behavior_offset'] = group['positive_behavior_offset'].ffill()
+    return group
+data = data.groupby(['user_id'], as_index=False).apply(positive_behavior_offset_process_group).reset_index(drop=True)
 data['positive_behavior_offset'] = data['positive_behavior_offset'].fillna(0)
+
 data = data.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].ffill()
+# data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].ffill()
+def item_positive_behavior_offset_process_group(group):
+    group['item_positive_behavior_offset'] = group['item_positive_behavior_offset'].ffill()
+    return group
+data = data.groupby(['item_id'], as_index=False).apply(item_positive_behavior_offset_process_group).reset_index(drop=True)
 data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].fillna(0)
 
 data = data.merge(data_negative[['item_id', 'ts', 'item_negative_behavior_offset']], on=['item_id', 'ts'], how='left')
 data = data.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].ffill()
+# data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].ffill()
+def item_negative_behavior_offset_process_group(group):
+    group['item_negative_behavior_offset'] = group['item_negative_behavior_offset'].ffill()
+    return group
+data = data.groupby(['item_id'], as_index=False).apply(item_negative_behavior_offset_process_group).reset_index(drop=True)
 data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].fillna(0)
 # data = data.drop_duplicates(keep=False)
 

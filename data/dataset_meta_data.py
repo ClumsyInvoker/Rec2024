@@ -65,6 +65,24 @@ KuaiRand_mata_data = {"user_num": 27284,
                         }
 meta_data['KuaiRand'] = KuaiRand_mata_data
 
+Tmall_mata_data = {"user_num": 52797,
+                         "item_num": 22955,
+                         "user_feature": {
+                               "dim": 2,
+                               "nume_feat_idx": [],
+                               "cate_id_feat_idx": [(0, 10), (1, 4)], #
+                               "cate_one_hot_feat_idx": []
+                               # 类别特征：id类是(idx, cate_num)，one hot类是(start_idx, end_idx)
+                         },
+                         "item_feature":{
+                            "dim": 3,
+                            "nume_feat_idx": [],
+                            "cate_id_feat_idx": [(0, 774), (1, 3714), (2, 3549)],
+                            "cate_one_hot_feat_idx": []
+                         }
+                        }
+meta_data['Tmall'] = Tmall_mata_data
+
 json.dump(meta_data, open('dataset_meta_data.json', 'w'), indent=4)
 
 dataset_meta_data = json.load(open('dataset_meta_data.json', 'r'))

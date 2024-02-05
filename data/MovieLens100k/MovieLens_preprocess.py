@@ -73,15 +73,28 @@ data_negative['item_negative_behavior_offset'] = data_negative.groupby(['item_id
 data = data.merge(data_positive[['user_id', 'item_id', 'ts', 'positive_behavior_offset', 'item_positive_behavior_offset']], on=['user_id', 'item_id', 'ts'], how='left')
 # 填充缺失值
 data = data.sort_values(by=['user_id', 'ts'], ascending=[True, True])
-data['positive_behavior_offset'] = data['positive_behavior_offset'].ffill()
+# data['positive_behavior_offset'] = data['positive_behavior_offset'].ffill()
+def positive_behavior_offset_process_group(group):
+    group['positive_behavior_offset'] = group['positive_behavior_offset'].ffill()
+    return group
+data = data.groupby(['user_id'], as_index=False).apply(positive_behavior_offset_process_group).reset_index(drop=True)
 data['positive_behavior_offset'] = data['positive_behavior_offset'].fillna(0)
+
 data = data.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].ffill()
+# data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].ffill()
+def item_positive_behavior_offset_process_group(group):
+    group['item_positive_behavior_offset'] = group['item_positive_behavior_offset'].ffill()
+    return group
+data = data.groupby(['item_id'], as_index=False).apply(item_positive_behavior_offset_process_group).reset_index(drop=True)
 data['item_positive_behavior_offset'] = data['item_positive_behavior_offset'].fillna(0)
 
 data = data.merge(data_negative[['item_id', 'ts', 'item_negative_behavior_offset']], on=['item_id', 'ts'], how='left')
 data = data.sort_values(by=['item_id', 'ts'], ascending=[True, True])
-data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].ffill()
+# data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].ffill()
+def item_negative_behavior_offset_process_group(group):
+    group['item_negative_behavior_offset'] = group['item_negative_behavior_offset'].ffill()
+    return group
+data = data.groupby(['item_id'], as_index=False).apply(item_negative_behavior_offset_process_group).reset_index(drop=True)
 data['item_negative_behavior_offset'] = data['item_negative_behavior_offset'].fillna(0)
 # data = data.drop_duplicates(keep=False)
 # print(data)

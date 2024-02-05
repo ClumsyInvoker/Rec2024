@@ -172,8 +172,9 @@ if __name__ == '__main__':
                 logits, loss_mse = logits
 
             adam_optimizer.zero_grad()
-            indices = np.where(target_item_id.cpu() != 0)
-            loss = bce_criterion(logits[indices], label[indices])
+            # indices = np.where(target_item_id.cpu() != 0)
+            # loss = bce_criterion(logits[indices], label[indices])
+            loss = bce_criterion(logits, label)
             if 'item_embedding' in model.state_dict().keys():
                 for param in model.item_embedding.parameters():
                     loss += args.l2_emb * torch.norm(param)

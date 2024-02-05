@@ -147,8 +147,9 @@ if __name__ == '__main__':
             logits = model(user_id, target_item_id, history_items, history_items_len, user_features, item_features, cold_item)
 
             adam_optimizer.zero_grad()
-            indices = np.where(target_item_id.cpu() != 0)
-            loss = bce_criterion(logits[indices], label[indices])
+            # indices = np.where(target_item_id.cpu() != 0)
+            # loss = bce_criterion(logits[indices], label[indices])
+            loss = bce_criterion(logits, label)
             if 'item_embedding' in model.state_dict().keys():
                 for param in model.item_embedding.parameters():
                     loss += args.l2_emb * torch.norm(param)
