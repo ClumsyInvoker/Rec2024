@@ -35,7 +35,7 @@ parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
 parser.add_argument('--embed_dim', default=16, type=int)
-parser.add_argument('--num_epochs', default=201, type=int)
+parser.add_argument('--num_epochs', default=50, type=int)
 parser.add_argument('--num_test_neg_item', default=100, type=int)
 parser.add_argument('--dropout_rate', default=0.5, type=float)
 parser.add_argument('--l2_emb', default=0.0, type=float)
@@ -43,7 +43,8 @@ parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
-parser.add_argument('--save_freq', default=20, type=int)
+parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--val_freq', default=1, type=int)
 parser.add_argument('--CB2CF_alpha', default=0.01, type=float)
 
 args = parser.parse_args()
@@ -52,7 +53,8 @@ if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
-with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
+with open(os.path.join(save_dir, 'args.txt'), 'a') as f:
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '\n')
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -86,12 +88,6 @@ if __name__ == '__main__':
         model = DeepFM(config).to(args.device)
     elif args.model_name == "DCN":
         model = DCN(config).to(args.device)
-    elif args.model_name == "DSSM_seq":
-        model = DSSM_seq(config).to(args.device)
-    elif args.model_name == "DSSM_DIN":
-        model = DSSM_DIN(config).to(args.device)
-    elif args.model_name == "DSSM_SASRec":
-        model = DSSM_SASRec(config).to(args.device)
     elif args.model_name == "DropoutNet":
         model = DropoutNet(config).to(args.device)
     elif args.model_name == "SASRec":
@@ -102,7 +98,8 @@ if __name__ == '__main__':
         model = CB2CF(config).to(args.device)
     else:
         raise ValueError("model name not supported")
-    f = open(os.path.join(save_dir, 'log.txt'), 'w')
+    f = open(os.path.join(save_dir, 'log.txt'), 'a')
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) +' model: ' + args.model_name + '\n')
 
     for name, param in model.named_parameters():
         try:
@@ -183,7 +180,7 @@ if __name__ == '__main__':
                     loss += args.l2_emb * torch.norm(param)
 
             if args.model_name == "CB2CF":
-                loss += loss_mse * args.CB2CF_alpha
+                loss +=  loss_mse * args.CB2CF_alpha
 
             loss.backward()
             adam_optimizer.step()
@@ -195,7 +192,7 @@ if __name__ == '__main__':
         print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
 
 
-        if epoch % 1 == 0:
+        if epoch % args.val_freq == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1

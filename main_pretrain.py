@@ -5,9 +5,11 @@ import argparse
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
+import json
+from copy import deepcopy
 
 from models.DIN import DeepInterestNetwork, DeepInterestNetwork_2tower
-from models.DSSM import DSSM
+from models.DSSM import DSSM, DSSM_seq, DSSM_DIN, DSSM_SASRec
 from utils.utils import evaluate
 from data.MyDataset import MyDataset
 
@@ -26,7 +28,7 @@ parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
 parser.add_argument('--embed_dim', default=16, type=int)
-parser.add_argument('--num_epochs', default=201, type=int)
+parser.add_argument('--num_epochs', default=50, type=int)
 parser.add_argument('--num_test_neg_item', default=100, type=int)
 parser.add_argument('--dropout_rate', default=0.5, type=float)
 parser.add_argument('--l2_emb', default=0.0, type=float)
@@ -34,7 +36,8 @@ parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
-parser.add_argument('--save_freq', default=20, type=int)
+parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--val_freq', default=1, type=int)
 
 args = parser.parse_args()
 save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
@@ -42,7 +45,8 @@ if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
-with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
+with open(os.path.join(save_dir, 'args.txt'), 'a') as f:
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '\n')
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -64,16 +68,28 @@ if __name__ == '__main__':
     config = {'embed_dim': args.embed_dim,
               'dim_config': {'item_id': itemnum+1, 'user_id': usernum+1,
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
-              'device': args.device}
+              'device': args.device,
+              'maxlen': args.maxlen}
+    dataset_meta_data = json.load(open(os.path.join('data', 'dataset_meta_data.json'), 'r'))
+    config['item_feature'] = dataset_meta_data[args.dataset]['item_feature']
+    config['user_feature'] = dataset_meta_data[args.dataset]['user_feature']
+
     if args.model_name == "DIN_2tower":
         model = DeepInterestNetwork_2tower(config).to(args.device)
     elif args.model_name == "DIN":
         model = DeepInterestNetwork(config).to(args.device)
     elif args.model_name == "DSSM":
         model = DSSM(config).to(args.device)
+    elif args.model_name == "DSSM_seq":
+        model = DSSM_seq(config).to(args.device)
+    elif args.model_name == "DSSM_DIN":
+        model = DSSM_DIN(config).to(args.device)
+    elif args.model_name == "DSSM_SASRec":
+        model = DSSM_SASRec(config).to(args.device)
     else:
         raise ValueError("model name not supported")
-    f = open(os.path.join(save_dir, 'log.txt'), 'w')
+    f = open(os.path.join(save_dir, 'log.txt'), 'a')
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ' model: ' + args.model_name + '\n')
 
     for name, param in model.named_parameters():
         try:
@@ -99,6 +115,9 @@ if __name__ == '__main__':
             import pdb
 
             pdb.set_trace()
+
+    if args.model_name == "DSSM_SASRec":
+        model.load_and_freeze_backbone(args.pretrain_model_path, True)
 
     if args.inference_only:
         model.eval()
@@ -136,19 +155,24 @@ if __name__ == '__main__':
             # indices = np.where(target_item_id.cpu() != 0)
             # loss = bce_criterion(logits[indices], label[indices])
             loss = bce_criterion(logits, label)
-            for param in model.item_embedding.parameters():
-                loss += args.l2_emb * torch.norm(param)
+            if 'item_embedding' in model.state_dict().keys():
+                for param in model.item_embedding.parameters():
+                    loss += args.l2_emb * torch.norm(param)
+            if 'user_embedding' in model.state_dict().keys():
+                for param in model.user_embedding.parameters():
+                    loss += args.l2_emb * torch.norm(param)
+
             loss.backward()
             adam_optimizer.step()
             epoch_loss += loss.item()
             train_loop.set_description("Epoch {}/{}".format(epoch, args.num_epochs))
-            train_loop.set_postfix(loss=loss.item())
+            train_loop.set_postfix(loss=epoch_loss/step)
             # print("loss in epoch {} iteration {}: {}".format(epoch, step,
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
         print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
 
 
-        if epoch % 1 == 0:
+        if epoch % args.val_freq == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
@@ -163,7 +187,7 @@ if __name__ == '__main__':
                 best_HR = t_test[1]
                 best_NDCG = t_test[0]
                 best_epoch = epoch
-                best_state_dict = model.state_dict()
+                best_state_dict = deepcopy(model.state_dict())
 
             f.write(str(t_valid) + ' ' + str(t_test) + '\n')
             f.flush()

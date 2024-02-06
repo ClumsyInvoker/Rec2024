@@ -40,6 +40,7 @@ parser.add_argument('--pretrain_model_path', default=None, type=str)
 parser.add_argument('--alpha', default=0.01, type=float)
 parser.add_argument('--beta', default=0.01, type=float)
 parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--val_freq', default=1, type=int)
 
 args = parser.parse_args()
 save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
@@ -47,7 +48,8 @@ if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
-with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
+with open(os.path.join(save_dir, 'args.txt'), 'a') as f:
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '\n')
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -89,7 +91,8 @@ if __name__ == '__main__':
     else:
         raise Exception("No such model!")
 
-    f = open(os.path.join(save_dir, 'log.txt'), 'w')
+    f = open(os.path.join(save_dir, 'log.txt'), 'a')
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ' model: ' + args.model_name + '\n')
 
     for name, param in model.named_parameters():
         try:
@@ -190,7 +193,7 @@ if __name__ == '__main__':
         # print("Epoch: {}, loss_rec: {}, loss_pfpe: {}, loss_fape: {}".format(
         #     epoch, epoch_loss_rec / step, epoch_loss_pfpe / step, epoch_loss_fape / step))
 
-        if epoch % 1 == 0:
+        if epoch % args.val_freq == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
