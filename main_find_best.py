@@ -3,21 +3,15 @@ import time
 import torch
 import argparse
 from torch.utils.data import DataLoader
+from torch.nn import functional as F
 from tqdm import tqdm
 import numpy as np
-import json
 from copy import deepcopy
 
-from models.DIN import DeepInterestNetwork
-from models.DeepFM import DeepFM
-from models.DCN import DCN
-from models.DropoutNet import DropoutNet
-from models.SASRec import SASRec
-from models.PPR import PPR
-from models.CB2CF import CB2CF
+from models.DSSM_ablation import DSSM_PTCR_norelu, DSSM_PTCR_1layer, DSSM_PTCR_reuse
+from utils.utils import evaluate_prompt
+from data.MyDataset import PTCRDataset
 
-from utils.utils import evaluate
-from data.MyDataset import MyDataset
 
 def str2bool(s):
     if s not in {'false', 'true'}:
@@ -28,13 +22,13 @@ def str2bool(s):
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=True)
 parser.add_argument('--train_dir', required=True)
-parser.add_argument('--model_name', default='DSSM', type=str)
+parser.add_argument('--model_name', default='DSSM_PTCR', type=str)
 parser.add_argument('--exp_name', default='base', type=str)
 parser.add_argument('--batch_size', default=128, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--maxlen', default=50, type=int)
 parser.add_argument('--embed_dim', default=16, type=int)
-parser.add_argument('--num_epochs', default=50, type=int)
+parser.add_argument('--num_epochs', default=201, type=int)
 parser.add_argument('--num_test_neg_item', default=100, type=int)
 parser.add_argument('--dropout_rate', default=0.5, type=float)
 parser.add_argument('--l2_emb', default=0.0, type=float)
@@ -42,9 +36,9 @@ parser.add_argument('--device', default='cpu', type=str)
 parser.add_argument('--inference_only', default=False, type=str2bool)
 parser.add_argument('--state_dict_path', default=None, type=str)
 parser.add_argument('--pretrain_model_path', default=None, type=str)
+parser.add_argument('--alpha', default=0.01, type=float)
+parser.add_argument('--beta', default=0.01, type=float)
 parser.add_argument('--save_freq', default=10, type=int)
-parser.add_argument('--val_freq', default=1, type=int)
-parser.add_argument('--CB2CF_alpha', default=0.01, type=float)
 
 args = parser.parse_args()
 save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
@@ -52,19 +46,18 @@ if not os.path.isdir(args.dataset + '_' + args.train_dir):
     os.makedirs(args.dataset + '_' + args.train_dir)
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
-with open(os.path.join(save_dir, 'args.txt'), 'a') as f:
-    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '\n')
+with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
 if __name__ == '__main__':
     # dataset
-    dataset_train = MyDataset(data_dir='data/' + args.dataset,
-                                                    max_length=args.maxlen, mode='train', device=args.device)
-    dataset_valid = MyDataset(data_dir='data/' + args.dataset,
-                                                    max_length=args.maxlen, mode='val', neg_num=args.num_test_neg_item, device=args.device)
-    dataset_test = MyDataset(data_dir='data/' + args.dataset,
-                                                   max_length=args.maxlen, mode='test', neg_num=args.num_test_neg_item, device=args.device)
+    dataset_train = PTCRDataset(data_dir='data/' + args.dataset,
+                                max_length=args.maxlen, mode='train', device=args.device)
+    dataset_valid = PTCRDataset(data_dir='data/' + args.dataset,
+                                max_length=args.maxlen, mode='val', neg_num=args.num_test_neg_item, device=args.device)
+    dataset_test = PTCRDataset(data_dir='data/' + args.dataset,
+                               max_length=args.maxlen, mode='test', neg_num=args.num_test_neg_item, device=args.device)
 
     usernum = dataset_train.user_num
     itemnum = dataset_train.item_num
@@ -73,32 +66,21 @@ if __name__ == '__main__':
     print('number of users: %d' % usernum, 'number of items: %d' % itemnum)
 
     config = {'embed_dim': args.embed_dim,
-              'dim_config': {'item_id': itemnum+1, 'user_id': usernum+1,
+              'dim_config': {'item_id': itemnum + 1, 'user_id': usernum + 1,
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
-              'device': args.device,
-              'maxlen': args.maxlen}
-    dataset_meta_data = json.load(open(os.path.join('data', 'dataset_meta_data.json'), 'r'))
-    config['item_feature'] = dataset_meta_data[args.dataset]['item_feature']
-    config['user_feature'] = dataset_meta_data[args.dataset]['user_feature']
-
-    if args.model_name == "DIN":
-        model = DeepInterestNetwork(config).to(args.device)
-    elif args.model_name == "DeepFM":
-        model = DeepFM(config).to(args.device)
-    elif args.model_name == "DCN":
-        model = DCN(config).to(args.device)
-    elif args.model_name == "DropoutNet":
-        model = DropoutNet(config).to(args.device)
-    elif args.model_name == "SASRec":
-        model = SASRec(config).to(args.device)
-    elif args.model_name == "PPR":
-        model = PPR(config).to(args.device)
-    elif args.model_name == "CB2CF":
-        model = CB2CF(config).to(args.device)
+              'prompt_embed_dim': args.embed_dim,
+              'prompt_net_hidden_size': args.embed_dim,
+              'device': args.device}
+    if args.model_name == "DSSM_PTCR_norelu":
+        model = DSSM_PTCR_norelu(config).to(args.device)
+    elif args.model_name == "DSSM_PTCR_1layer":
+        model = DSSM_PTCR_1layer(config).to(args.device)
+    elif args.model_name == "DSSM_PTCR_reuse":
+        model = DSSM_PTCR_reuse(config).to(args.device)
     else:
-        raise ValueError("model name not supported")
-    f = open(os.path.join(save_dir, 'log.txt'), 'a')
-    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) +' model: ' + args.model_name + '\n')
+        raise Exception("No such model!")
+
+    f = open(os.path.join(save_dir, 'log.txt'), 'w')
 
     for name, param in model.named_parameters():
         try:
@@ -125,23 +107,20 @@ if __name__ == '__main__':
 
             pdb.set_trace()
 
-    # 加载 sequential model
-    if args.model_name == "PPR":
-        if args.pretrain_model_path is not None:
-            freeze = False if args.exp_name == "full" else True
-            model.load_and_freeze_backbone(args.pretrain_model_path, freeze)
-        else:
-            raise ValueError("PPR model needs pretrain_model_path")
+    # 加载 backbone
+    model.load_and_freeze_backbone(args.pretrain_model_path)
 
     if args.inference_only:
         model.eval()
-        t_test = evaluate(model, dataset_test, args)
+        t_test = evaluate_prompt(model, dataset_test, args)
         print('test (NDCG@10: %.4f, HR@10: %.4f)' % (t_test[0], t_test[1]))
 
     # ce_criterion = torch.nn.CrossEntropyLoss()
     # https://github.com/NVIDIA/pix2pixHD/issues/9 how could an old bug appear again...
     bce_criterion = torch.nn.BCEWithLogitsLoss()  # torch.nn.BCELoss()
-    adam_optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.98))
+    # backbone冻结参数不参与训练
+    adam_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr,
+                                      betas=(0.9, 0.98))
 
     T = 0.0
     t0 = time.time()
@@ -158,28 +137,38 @@ if __name__ == '__main__':
         step = 0
         epoch_loss = 0.0
         train_loop = tqdm(dataloader, desc="Training Progress")
+        # epoch_loss_rec = epoch_loss_pfpe = epoch_loss_fape = 0.0
+
         for data in train_loop:
             step += 1
             user_id, history_items, history_items_len, target_item_id, \
-                user_features, item_features, label, cold_item = data
+            user_features, item_features, label, cold_item, \
+            item_pos_feedback, item_pos_feedback_len, item_neg_feedback, item_neg_feedback_len = data
 
-            logits = model(user_id, target_item_id, history_items, history_items_len, user_features, item_features)
-            if args.model_name == "CB2CF":
-                logits, loss_mse = logits
-
+            logits, loss_pfpe = model(user_id, target_item_id, history_items, history_items_len, user_features,
+                                      item_features,
+                                      item_pos_feedback, item_pos_feedback_len, item_neg_feedback,
+                                      item_neg_feedback_len)
             adam_optimizer.zero_grad()
             # indices = np.where(target_item_id.cpu() != 0)
             # loss = bce_criterion(logits[indices], label[indices])
             loss = bce_criterion(logits, label)
-            if 'item_embedding' in model.state_dict().keys():
-                for param in model.item_embedding.parameters():
-                    loss += args.l2_emb * torch.norm(param)
-            if 'user_embedding' in model.state_dict().keys():
-                for param in model.user_embedding.parameters():
-                    loss += args.l2_emb * torch.norm(param)
+            # epoch_loss_rec += loss.item()
+            # for param in model.item_embedding.parameters():
+            #     loss += args.l2_emb * torch.norm(param)
+            loss += args.alpha * loss_pfpe.sum(dim=1).mean(dim=0)
+            # epoch_loss_pfpe += loss_pfpe.sum(dim=1).mean(dim=0).item()
 
-            if args.model_name == "CB2CF":
-                loss +=  loss_mse * args.CB2CF_alpha
+            # fape loss
+            selected_indices = (label == 1) & (cold_item == 1)
+            pos_cold_item_logits = logits[selected_indices]
+            selected_indices = (label == 0) & (cold_item == 0)
+            neg_hot_item_logits = logits[selected_indices]
+            loss_fape = F.softplus(-(pos_cold_item_logits.sum() * len(neg_hot_item_logits) -
+                                     neg_hot_item_logits.sum() * len(pos_cold_item_logits)), beta=1, threshold=10)
+
+            loss += args.beta * loss_fape
+            # epoch_loss_fape += loss_fape.item()
 
             loss.backward()
             adam_optimizer.step()
@@ -189,15 +178,16 @@ if __name__ == '__main__':
             # print("loss in epoch {} iteration {}: {}".format(epoch, step,
             #                                                  loss.item()))  # expected 0.4~0.6 after init few epochs
         print("Epoch: {}, loss: {}".format(epoch, epoch_loss / step))
+        # print("Epoch: {}, loss_rec: {}, loss_pfpe: {}, loss_fape: {}".format(
+        #     epoch, epoch_loss_rec / step, epoch_loss_pfpe / step, epoch_loss_fape / step))
 
-
-        if epoch % args.val_freq == 0:
+        if epoch % 1 == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1
             print('Evaluating', end='')
-            t_test = evaluate(model, dataset_test, args)
-            t_valid = evaluate(model, dataset_valid, args)
+            t_valid = evaluate_prompt(model, dataset_valid, args, 'val')
+            t_test = evaluate_prompt(model, dataset_test, args, 'test')
             print('epoch:%d, time: %f(s), valid (NDCG@10: %.4f, HR@10: %.4f), test (NDCG@10: %.4f, HR@10: %.4f)'
                   % (epoch, T, t_valid[0], t_valid[1], t_test[0], t_test[1]))
 
@@ -215,9 +205,9 @@ if __name__ == '__main__':
 
         if epoch % args.save_freq == 0 or epoch == args.num_epochs:
             folder = save_dir
-            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.l2_emb={}.pth'
+            fname = 'epoch={}.lr={}.embed_dim={}.maxlen={}.alpha={}.beta={}.pth'
             fname = fname.format(epoch, args.lr, args.embed_dim,
-                                 args.maxlen, args.l2_emb)
+                                 args.maxlen, args.alpha, args.beta)
             torch.save(model.state_dict(), os.path.join(folder, fname))
 
     f.write("best epoch: {}, best NDCG@10: {}, best HR@10: {}".format(best_epoch, best_NDCG, best_HR))

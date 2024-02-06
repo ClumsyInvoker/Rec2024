@@ -85,7 +85,7 @@ class MyDataset(Dataset):
     def __init__(self, data_dir, max_length=50, mode='train', neg_num=1, device='cpu'):
         self.mode = mode
         self.max_length = max_length
-        self.neg_num = neg_num
+        self.neg_num = PTCRDataset
         self.device = device
 
         # 从CSV文件中加载meta data

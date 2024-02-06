@@ -148,6 +148,8 @@ class FullyConnectedLayer(nn.Module):
                 layers.append(nn.PReLU(num_parameters=1, init=prelu_init))
             elif activation.lower() == 'sigmoid':
                 layers.append(nn.Sigmoid())
+            elif activation.lower() == 'none':
+                pass
             else:
                 raise NotImplementedError
 

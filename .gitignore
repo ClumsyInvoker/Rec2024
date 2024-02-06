@@ -1,1 +1,6 @@
 .idea/
+shell/
+data/Tmall/*.csv
+data/KuaiRand/*.csv
+data/MovieLens100k/*.csv
+data/MovieLens1m/*.csv

@@ -6,9 +6,11 @@ from torch.utils.data import DataLoader
 from torch.nn import functional as F
 from tqdm import tqdm
 import numpy as np
+import json
 from copy import deepcopy
 
-from models.DSSM_ablation import DSSM_PTCR_norelu, DSSM_PTCR_1layer, DSSM_PTCR_reuse
+from models.DSSM_head import DSSM_SASRec_PTCR_head
+from models.DSSM_net import DSSM_SASRec_PTCR_net
 from utils.utils import evaluate_prompt
 from data.MyDataset import PTCRDataset
 
@@ -39,14 +41,21 @@ parser.add_argument('--pretrain_model_path', default=None, type=str)
 parser.add_argument('--alpha', default=0.01, type=float)
 parser.add_argument('--beta', default=0.01, type=float)
 parser.add_argument('--save_freq', default=10, type=int)
+parser.add_argument('--val_freq', default=1, type=int)
+parser.add_argument('--ablation_setting', default='original', type=str)
 
 args = parser.parse_args()
-save_dir = os.path.join(args.dataset + '_' + args.train_dir, args.exp_name)
-if not os.path.isdir(args.dataset + '_' + args.train_dir):
-    os.makedirs(args.dataset + '_' + args.train_dir)
+
+ablation_dir = "./ablation"
+save_dir = os.path.join(ablation_dir, args.dataset + '_' + args.train_dir, args.exp_name+'_'+args.ablation_setting)
+if not os.path.isdir(ablation_dir):
+    os.makedirs(ablation_dir)
+if not os.path.isdir(os.path.join(ablation_dir, args.dataset + '_' + args.train_dir)):
+    os.makedirs(os.path.join(ablation_dir, args.dataset + '_' + args.train_dir))
 if not os.path.isdir(save_dir):
     os.makedirs(save_dir)
-with open(os.path.join(save_dir, 'args.txt'), 'w') as f:
+with open(os.path.join(save_dir, 'args.txt'), 'a') as f:
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + '\n')
     f.write('\n'.join([str(k) + ',' + str(v) for k, v in sorted(vars(args).items(), key=lambda x: x[0])]))
 f.close()
 
@@ -70,17 +79,23 @@ if __name__ == '__main__':
                              'item_feature': item_features_dim, 'user_feature': user_features_dim},
               'prompt_embed_dim': args.embed_dim,
               'prompt_net_hidden_size': args.embed_dim,
-              'device': args.device}
-    if args.model_name == "DSSM_PTCR_norelu":
-        model = DSSM_PTCR_norelu(config).to(args.device)
-    elif args.model_name == "DSSM_PTCR_1layer":
-        model = DSSM_PTCR_1layer(config).to(args.device)
-    elif args.model_name == "DSSM_PTCR_reuse":
-        model = DSSM_PTCR_reuse(config).to(args.device)
+              'device': args.device,
+              'maxlen': args.maxlen,
+              'prompt_ablation_setting': args.ablation_setting
+              }
+    dataset_meta_data = json.load(open(os.path.join('data', 'dataset_meta_data.json'), 'r'))
+    config['item_feature'] = dataset_meta_data[args.dataset]['item_feature']
+    config['user_feature'] = dataset_meta_data[args.dataset]['user_feature']
+
+    if args.model_name == "DSSM_SASRec_PTCR_head":
+        model = DSSM_SASRec_PTCR_head(config).to(args.device)
+    elif args.model_name == "DSSM_SASRec_PTCR_net":
+        model = DSSM_SASRec_PTCR_net(config).to(args.device)
     else:
         raise Exception("No such model!")
 
-    f = open(os.path.join(save_dir, 'log.txt'), 'w')
+    f = open(os.path.join(save_dir, 'log.txt'), 'a')
+    f.write(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ' model: ' + args.model_name + '\n')
 
     for name, param in model.named_parameters():
         try:
@@ -181,7 +196,7 @@ if __name__ == '__main__':
         # print("Epoch: {}, loss_rec: {}, loss_pfpe: {}, loss_fape: {}".format(
         #     epoch, epoch_loss_rec / step, epoch_loss_pfpe / step, epoch_loss_fape / step))
 
-        if epoch % 1 == 0:
+        if epoch % args.val_freq == 0:
             model.eval()
             t1 = time.time() - t0
             T += t1

@@ -1,35 +1,27 @@
-from copy import deepcopy
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
 import numpy as np
-import pandas as pd
-
-from sklearn.preprocessing import LabelEncoder, OrdinalEncoder, KBinsDiscretizer
-from sklearn.model_selection import train_test_split
-from sklearn import metrics
 
 import torch
 from torch.utils.data import DataLoader
-import random
 
-import sys
 
-# def create_dataset(dataset='criteo', read_part=True, sample_num=100000, task='classification', sequence_length=40, device=torch.device('cpu')):
-#     if dataset == 'criteo':
-#         return CriteoDataset('../dataset/criteo-100k.txt', read_part=read_part, sample_num=sample_num).to(device)
-#     elif dataset == 'movielens':
-#         return MovieLensDataset('../dataset/ml-latest-small-ratings.txt', read_part=read_part, sample_num=sample_num, task=task).to(device)
-#     elif dataset == 'amazon-books':
-#         return AmazonBooksDataset('../dataset/amazon-books-100k.txt', read_part=read_part, sample_num=sample_num, sequence_length=sequence_length).to(device)
-#     else:
-#         raise Exception('No such dataset!')
+def evaluate_by_model_name(model_name, model, dataset, args, mode='test'):
+    if model_name == "DSSM_SASRec_PTCR" or "PTCR" in model_name:
+        # 使用prompt的模型，需要正反馈信息
+        return evaluate_prompt(model, dataset, args, mode)
+    elif model_name == "PLATE" or model_name == "MetaEmb":
+        # 需要cold item信息的模型
+        return evaluate_PLATE(model, dataset, args, mode)
+    else:
+        return evaluate(model, dataset, args)
 
 
 def evaluate(model, dataset, args):
     NDCG = 0.0
     HT = 0.0
     valid_user = 0
+    top_K = getattr(args, 'top_K', 10)
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     num_test_neg_item = args.num_test_neg_item
@@ -52,7 +44,7 @@ def evaluate(model, dataset, args):
 
         valid_user += 1
 
-        if rank < 10:
+        if rank < top_K:
             NDCG += 1 / np.log2(rank + 2)
             HT += 1
 
@@ -62,6 +54,7 @@ def evaluate_prompt(model, dataset, args, mode='test'):
     NDCG = 0.0
     HT = 0.0
     valid_user = 0
+    top_K = getattr(args, 'top_K', 10)
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     num_test_neg_item = args.num_test_neg_item
@@ -91,7 +84,7 @@ def evaluate_prompt(model, dataset, args, mode='test'):
 
         valid_user += 1
 
-        if rank < 10:
+        if rank < top_K:
             NDCG += 1 / np.log2(rank + 2)
             HT += 1
 
@@ -102,6 +95,7 @@ def evaluate_PLATE(model, dataset, args, mode='test'):
     NDCG = 0.0
     HT = 0.0
     valid_user = 0
+    top_K = getattr(args, 'top_K', 10)
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     num_test_neg_item = args.num_test_neg_item
@@ -127,7 +121,7 @@ def evaluate_PLATE(model, dataset, args, mode='test'):
 
         valid_user += 1
 
-        if rank < 10:
+        if rank < top_K:
             NDCG += 1 / np.log2(rank + 2)
             HT += 1
 

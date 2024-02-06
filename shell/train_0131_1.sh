@@ -1,0 +1,5 @@
+python main.py --dataset MovieLens100k --model_name DSSM_DIN_PTCR --train_dir DSSM_DIN_PTCR --exp_name a0b0 --num_epochs 21 --device cuda:1 --l2_emb 0.01 --pretrain_model_path ./MovieLens100k_DSSM_DIN/base/best.pth --alpha 0 --beta 0
+python main.py --dataset MovieLens100k --model_name DSSM_DIN_PTCR --train_dir DSSM_DIN_PTCR --exp_name a001b001 --num_epochs 21 --device cuda:1 --l2_emb 0.01 --pretrain_model_path ./MovieLens100k_DSSM_DIN/base/best.pth --alpha 0.01 --beta 0.01
+python main_baseline.py --dataset MovieLens1m --model_name DSSM_DIN --train_dir DSSM_DIN --exp_name base --num_epochs 51 --device cuda:1 --l2_emb 0.01
+python main.py --dataset MovieLens1m --model_name DSSM_DIN_PTCR --train_dir DSSM_DIN_PTCR --exp_name a0b0 --num_epochs 21 --device cuda:1 --l2_emb 0.01 --pretrain_model_path ./MovieLens1m_DSSM_DIN/base/best.pth --alpha 0 --beta 0
+python main.py --dataset MovieLens1m --model_name DSSM_DIN_PTCR --train_dir DSSM_DIN_PTCR --exp_name a001b001 --num_epochs 21 --device cuda:1 --l2_emb 0.01 --pretrain_model_path ./MovieLens1m_DSSM_DIN/base/best.pth --alpha 0.01 --beta 0.01
