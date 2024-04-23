@@ -37,7 +37,7 @@ print("total interaction num: {}, positive interaction num: {}, negative interac
 print("total item num: {}, positive item num: {}"
       .format(data['item_id'].value_counts().shape[0], data_positive['item_id'].value_counts().shape[0]))
 #统计交互次数小于10的item
-hot_items = item_count[item_count['count'] >= 10]
+hot_items = item_count[item_count['count'] >= 50]
 # item_count = item_count.drop(hot_items.index)
 # item_count = item_count[item_count['count'] < 10]
 # cold_item_ids = item_count['item_id'].values
@@ -45,7 +45,6 @@ cold_item_ids = [i for i in range(data['item_id'].max()) if i not in hot_items['
 print("item num with interaction less than 10: {}".format(len(cold_item_ids)))
 
 pickle.dump(cold_item_ids, open('cold_item_ids.pkl', 'wb'))
-
 
 # 存储meta data
 user_num = data['user_id'].max()
@@ -138,6 +137,7 @@ merged_data = pd.concat([data, val_data, test_data])
 train_data = merged_data.drop_duplicates(keep=False)
 train_data = train_data.sort_values(by=['user_id', 'ts'], ascending=[True, True])
 train_data = train_data[train_data['positive_behavior_offset'] >= 3]
+train_data_cold = train_data[train_data['item_id'].isin(cold_item_ids)]
 
 # train_data = train_data.drop(columns=['ts'])
 # val_data = val_data.drop(columns=['ts'])
@@ -145,6 +145,7 @@ train_data = train_data[train_data['positive_behavior_offset'] >= 3]
 
 # 存储数据
 train_data.to_csv('train_data.csv', index=False)
+train_data_cold.to_csv('train_data_cold.csv', index=False)
 val_data.to_csv('val_data.csv', index=False)
 test_data.to_csv('test_data.csv', index=False)
 
